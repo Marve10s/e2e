@@ -262,6 +262,12 @@ in order; `toContainText(['Alpha', 'Beta'])` needs each entry in a distinct
 match, in order, extra matches allowed. `toBeAttached` waits for a match to
 exist, hidden or not. A failed matcher is `ASSERTION_FAILED`, exit code 1.
 
+Playwright's `{ checked: false }`, `{ enabled: false }`, `{ visible: false }`,
+and `{ attached: false }` flip their matchers, and `{ ignoreCase: true }`
+works on `toHaveText`, `toContainText`, `toHaveAccessibleName`, and
+`toHaveAttribute(name, value)`. Any other option, `indeterminate` or
+`useInnerText` included, is `INVALID_ARGUMENT`, in JavaScript too.
+
 A test that takes only `app` opens no page and calls no model; the browser
 the worker launched and the context per attempt are still paid. Check an
 API with `fetch` against `app.baseUrl` and the value matchers, in the same

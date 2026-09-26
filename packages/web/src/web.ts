@@ -294,7 +294,10 @@ export function createWebFixture(surface: PlaywrightSurface, context: EngineFixt
     url: currentUrl,
     title: currentTitle,
     // The same poll as `expect(web).toHaveURL`, exposed as a wait.
-    waitForURL: (url, options) => expectation.toHaveURL(url, options),
+    waitForURL: (url, options) => {
+      rejectOptionsBesidesTimeout('web.waitForURL', options);
+      return expectation.toHaveURL(url, options);
+    },
     locator: (selector) => context.locator({ kind: 'selector', selector: requireSelector('web.locator', selector) }),
     frameLocator: (selector) => frameScreen(context, [requireSelector('web.frameLocator', selector)]),
     async evaluate<T extends JsonValue>(
@@ -569,11 +572,14 @@ function createWebExpectation(deps: ExpectationDeps, negated = false): WebExpect
         ),
     });
   };
+  const validate = (api: string, options: object | undefined): void =>
+    rejectOptionsBesidesTimeout(`expect.${negated ? 'not.' : ''}${api}`, options);
   return {
     get not() {
       return createWebExpectation(deps, !negated);
     },
     toHaveURL(expected, options) {
+      validate('toHaveURL', options);
       const label = typeof expected === 'string' ? expected : String(expected);
       const target = deps.baseHref();
       return poll(
@@ -585,6 +591,7 @@ function createWebExpectation(deps: ExpectationDeps, negated = false): WebExpect
       );
     },
     toHaveTitle(expected, options) {
+      validate('toHaveTitle', options);
       const pattern = toTextPattern(expected, { exact: true });
       return poll(
         'toHaveTitle',
@@ -595,6 +602,7 @@ function createWebExpectation(deps: ExpectationDeps, negated = false): WebExpect
       );
     },
     toHaveClass(target, expected, options) {
+      validate('toHaveClass', options);
       const pattern = toTextPattern(expected, { exact: true });
       return poll(
         'toHaveClass',
@@ -624,6 +632,26 @@ function createWebExpectation(deps: ExpectationDeps, negated = false): WebExpect
       );
     },
   };
+}
+
+/**
+ * Refuses an option a `web` matcher or `waitForURL` does not take: each takes
+ * `timeout` only, so a JavaScript caller's Playwright option (`ignoreCase` on
+ * `toHaveURL`, `waitUntil` on `waitForURL`) fails instead of running as if
+ * it were absent.
+ */
+function rejectOptionsBesidesTimeout(api: string, options: unknown): void {
+  if (options === undefined) return;
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new TestError('INVALID_ARGUMENT', `${api} options must be a plain object`);
+  }
+  const unknown = Object.keys(options).filter((key) => key !== 'timeout');
+  if (unknown.length === 0) return;
+  const keys = unknown.map((key) => `"${key}"`).join(', ');
+  throw new TestError(
+    'INVALID_ARGUMENT',
+    `${api} options has no ${unknown.length === 1 ? 'key' : 'keys'} ${keys}; it takes timeout`,
+  );
 }
 
 function requireSelector(method: string, selector: unknown): string {

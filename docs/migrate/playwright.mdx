@@ -169,6 +169,9 @@ to do today.
 | `toHaveText()`, `toContainText()` | compare the rendered text, as `{ useInnerText: true }` does in Playwright | `expect` | by design |
 | `toHaveValue()`, `toHaveAttribute()`, `toHaveCount()`, `toHaveAccessibleName()` | the same | `expect` | same |
 | `toHaveText(['a', 'b'])`, `toContainText([...])` on several matches | the same: `toHaveText` needs the count to match, `toContainText` an ordered subsequence | `expect` | same |
+| `toBeChecked({ checked: false })`, `toBeEnabled({ enabled })`, `toBeVisible({ visible })`, `toBeAttached({ attached })` | the same | `expect` | same |
+| `{ ignoreCase }` on `toHaveText()`, `toContainText()`, `toHaveAccessibleName()`, `toHaveAttribute(name, value)` | the same | `expect` | same |
+| `toBeChecked({ indeterminate })`, `{ useInnerText }`, `toHaveURL(url, { ignoreCase })` | not yet; `INVALID_ARGUMENT`, so the matcher never passes on its default | `expect` | missing |
 | `toHaveAttribute('aria-selected', 'true')`, `'aria-expanded'` | `toBeSelected()`, `toBeExpanded()` | `expect` | renamed |
 | a positive matcher on several matches | `LOCATOR_AMBIGUOUS` at once; narrow with `filter`, `first`, or `{ visible: true }` | `expect` | by design |
 | `toBeAttached()` | the same; passes on a hidden match too | `expect` | same |
