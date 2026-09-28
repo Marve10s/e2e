@@ -395,7 +395,7 @@ class AsyncExpectationImpl implements AsyncExpectation {
   ): Promise<void> {
     const hasValue = typeof valueOrOptions === 'string' || valueOrOptions instanceof RegExp;
     // Presence reads the third argument too when the value is `undefined`, as Playwright does.
-    const bag = hasValue ? options : (valueOrOptions ?? options);
+    const bag = hasValue ? options : valueOrOptions === undefined ? options : valueOrOptions;
     const ignoreCase = this.readOptions('toHaveAttribute', bag, hasValue ? 'ignoreCase' : undefined);
     const pattern = hasValue ? withIgnoreCase(toTextPattern(valueOrOptions, { exact: true }), ignoreCase) : undefined;
     const comparison: TextComparison = { mode: 'equals', normalize: true, ignoreCase };
