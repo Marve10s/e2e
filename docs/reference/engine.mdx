@@ -888,6 +888,7 @@ Use these helpers to keep behavior consistent across engines:
 | `urlMatches(current, expected, baseHref)` | `toHaveURL`-style comparison; an `expected` that is neither a string nor a `RegExp` throws `INVALID_ARGUMENT`, as in `toTextPattern` |
 | `pollCondition({ deadline, signal, negated, evaluate, onTimeout })`, `Deadline` | Assertion polling and the negation grace window |
 | `validateJsonValue(value, label)` | Rejects `undefined`, `NaN`, and cycles in a value a fixture returns |
+| `rejectUnknownOptions(api, options, known)` | `INVALID_ARGUMENT` for an option key a fixture method or matcher does not take, so a JavaScript caller's unsupported option fails instead of running on the default |
 | `obj`, `raceAbort`, `withTimeout`, `withinCleanupBudget` | See [Contributed fixtures](#contributed-fixtures) |
 
 ## State

@@ -200,7 +200,7 @@ to do today.
 | `page.goBack()` | `app.back()`, or `web.back()` | `app` | renamed |
 | `page.goForward()`, `page.reload()` | `web.forward()`, `web.reload()` | `web` | web only |
 | `page.url()`, `page.title()` | `web.url()`, `web.title()` | `web` | web only |
-| `page.waitForURL()` | `web.waitForURL()`; a string or `RegExp`, no predicate function | `web` | web only |
+| `page.waitForURL()` | `web.waitForURL()`; a string or `RegExp`, no predicate function, and `timeout` is its only option, so `waitUntil` is `INVALID_ARGUMENT` | `web` | web only |
 | `page.waitForLoadState()` | not yet; `web.goto(url, { waitUntil })` on the navigation itself | `web` | missing |
 | `page.waitForFunction(fn)` | `expect.poll(() => web.evaluate(fn)).toBeTruthy()` | `web` | missing |
 | `page.waitForTimeout(ms)` | a locator assertion on the state you are waiting for | `expect` | by design |

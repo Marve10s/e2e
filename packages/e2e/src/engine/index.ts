@@ -26,9 +26,10 @@ import { engineBrand } from '../internal/brands.ts';
 // Semantics the spec requires every engine and contributed fixture to
 // reproduce exactly, exported so an engine never carries its own copy: the
 // runner error taxonomy, text-pattern matching, locator resolution over a
-// semantic tree, URL matching, assertion polling, and the JSON-value rules
-// for data a fixture returns.
+// semantic tree, URL matching, assertion polling, option-bag validation, and
+// the JSON-value rules for data a fixture returns.
 export { ConfigurationError, InfrastructureError, TestError } from '../internal/errors.ts';
+export { rejectUnknownOptions } from '../internal/options.ts';
 export { validateJsonValue, type JsonValueRules } from '../internal/json-value.ts';
 export { describePattern, matchesText, toTextPattern } from '../internal/text.ts';
 export { resolveExpression, type ResolveExpressionOptions } from './resolve.ts';
