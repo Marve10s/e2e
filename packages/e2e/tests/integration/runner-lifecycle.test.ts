@@ -937,18 +937,18 @@ test.describe('flow', { serial: true }, () => {
 `,
       );
       const controller = new AbortController();
-      // The first attempt has failed once the marker exists; the retry is then under way.
-      const watch = setInterval(() => {
-        if (!existsSync(marker)) return;
-        clearInterval(watch);
-        setTimeout(() => controller.abort(), 500);
-      }, 50);
+      let starts = 0;
       const outcome = await runExisting(project, {
         appUrl: app.url,
         config: { tests: 'tests/**/*.e2e.ts', retries: 1 },
-        runOptions: { interruptSignal: controller.signal },
+        runOptions: {
+          interruptSignal: controller.signal,
+          onEvent: (event) => {
+            // A serial member starts once per group attempt: the second start is the retry.
+            if (event.type === 'test-started' && event.title === 'flow > first step' && (starts += 1) === 2) controller.abort();
+          },
+        },
       });
-      clearInterval(watch);
       expect(outcome.exitCode).toBe(130);
       expect(outcome.report.run.serialGroups[0]?.attempts.map((attempt) => attempt.status)).toEqual(['failed', 'interrupted']);
       expect(resultByTitle(outcome, 'first step').status).toBe('failed');
