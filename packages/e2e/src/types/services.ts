@@ -47,7 +47,7 @@ export interface ProcessServiceOptions extends ServiceBase, CommandConfig {
    * (migrations, `docker compose up --wait`). A non-zero exit or the
    * `startupTimeout` expiring is `APP_UNREACHABLE`.
    */
-  waitForExit?: boolean;
+  waitForExit?: true;
   /**
    * Named ports, each 0 for a free port the run assigns or a fixed number:
    * `{ smtp: 0, http: 0 }`, read as `{port:smtp}` in the service's own args,
