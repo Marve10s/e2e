@@ -121,8 +121,9 @@ A failing attempt can still save steps verified before the failure. It
 deletes unverified entries and replays implicated in the failure, including
 an `end-mismatch`. Custom stores need a `delete` method for this cleanup.
 
-Cancelling a run leaves the cache unchanged. A failure where no model
-answered leaves every entry it did not confirm unchanged: `MODEL_UNAVAILABLE`
+Cancelling a run leaves the cache unchanged. An attempt whose only failures
+are ones where no model answered leaves every entry it did not confirm
+unchanged: `MODEL_UNAVAILABLE`
 (no model configured) and `MODEL_PROVIDER_FAILED` (the provider returned an
 error such as a missing or rejected key, a rate limit, or a 5xx, or a request
 got no response within 120 seconds). Those say nothing about the app, so a
@@ -131,7 +132,8 @@ step replayed before an `agent.assert` that could not reach its model, and
 still saves steps verified before the failure. A model that answered with
 something unusable (`MODEL_OUTPUT_INVALID`, `CONTEXT_OVERFLOW`) or a step that
 ran out of time (`STEP_TIMEOUT`, even while a request was still open) counts
-as a failure of the flow.
+as a failure of the flow, and so does any other failure in the same attempt,
+such as an `afterEach` assertion.
 
 ## Why a step was not replayed
 

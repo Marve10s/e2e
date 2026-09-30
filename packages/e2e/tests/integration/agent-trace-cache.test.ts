@@ -340,6 +340,19 @@ test('cached step increments twice', async ({ app, agent, screen }) => {
 });
 `;
 
+const PROVIDER_DOWN_THEN_WRONG_AFTER_EACH_SUITE = `import { test, expect } from 'e2e';
+
+test.afterEach(async ({ screen }) => {
+  await expect(screen.getByRole('status')).toHaveText('3', { timeout: 1_000 });
+});
+
+test('cached step increments twice', async ({ app, agent }) => {
+  await app.open();
+  await agent.act('increment the counter twice');
+  await agent.assert('the counter shows 2', { agent: 'judge' });
+});
+`;
+
 /** A model whose provider never answers: every request fails, as with a missing key or an outage. */
 const unreachableModel = createScriptedInstance('fake', 'unreachable', async () => {
   throw new Error('401 Unauthorized: no API key was provided');
@@ -410,6 +423,24 @@ describe('trace cache: a model that never answered implicates nothing', () => {
     expect(actStep(outcome).cache?.mode).toBe('missed');
     expect(stepErrorCode(outcome, 'agent.assert')).toBe('MODEL_PROVIDER_FAILED');
     expect(readOnlyEntry(project).entry.payload.actions).toHaveLength(2);
+    project.cleanup();
+  }, 240_000);
+
+  it('still evicts the replayed entry when a later assertion fails on the app', async () => {
+    await recordEntry();
+    writeFileSync(path.join(project.dir, 'tests', 'act.e2e.ts'), PROVIDER_DOWN_THEN_WRONG_AFTER_EACH_SUITE, 'utf8');
+    const outcome = await runExisting(project, {
+      appUrl: app.url,
+      config: {
+        tests: 'tests/**/*.e2e.ts',
+        agents: { default: { executor: twoTapExecutor(record) }, judge: { model: unreachableModel } },
+        cache: 'read-write' as const,
+      },
+    });
+    expect(outcome.exitCode).not.toBe(0);
+    expect(actStep(outcome).cache?.mode).toBe('self-finalized');
+    expect(stepErrorCode(outcome, 'agent.assert')).toBe('MODEL_PROVIDER_FAILED');
+    expect(readEntries(project)).toHaveLength(0);
     project.cleanup();
   }, 240_000);
 

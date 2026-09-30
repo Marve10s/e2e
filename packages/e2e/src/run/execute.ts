@@ -881,17 +881,23 @@ export class TargetExecutor implements SerialHost {
     // afterEach cleanup, teardown — must not confirm traces the failure
     // implicated (a cleanup assertion says nothing about the failed flow).
     let lastVerifiedAtFailure = -1;
+    // Whether any failure, primary or later, says something about the app:
+    // one where no model answered does not, but an afterEach assertion
+    // failing after it still implicates the flows nothing confirmed.
+    let implicatesUnconfirmed = false;
     // The first failure is the verdict; whatever lands after it, a teardown
     // that also threw or a rejection surfacing late, is kept beside it.
     const recordFailure = (cause: unknown, atPhase: AttemptPhase): void => {
+      const classified = classifyError(cause);
+      if (!isModelUnreachable(classified)) implicatesUnconfirmed = true;
       if (failure !== undefined) {
         secondaryErrors.push(
-          serializeError(classifyError(cause), { phase: atPhase, projectRoot: this.config.projectRoot, redact }),
+          serializeError(classified, { phase: atPhase, projectRoot: this.config.projectRoot, redact }),
         );
         return;
       }
       lastVerifiedAtFailure = steps.lastVerifiedStepIndex;
-      failure = classifyError(cause);
+      failure = classified;
       failurePhase = atPhase;
     };
     // One more look at the app the moment the failure lands: what the screen
@@ -1180,12 +1186,13 @@ export class TargetExecutor implements SerialHost {
     // implicates nothing: it writes nothing and evicts nothing, so Ctrl-C can
     // never evict a good entry. On a failure, confirmation stops at what had
     // been verified when the failure landed; later teardown steps prove
-    // nothing about the flow. A failure where no model answered implicates
-    // nothing unconfirmed either, so a provider outage evicts no entry.
+    // nothing about the flow. An attempt whose every failure is that no model
+    // answered implicates nothing unconfirmed, so a provider outage evicts no
+    // entry.
     if (cache !== undefined && record.status !== 'interrupted') {
       await flushStagedTraces(cache, {
         lastVerifiedStepIndex: failure === undefined ? steps.lastVerifiedStepIndex : lastVerifiedAtFailure,
-        implicatesUnconfirmed: !isModelUnreachable(failure),
+        implicatesUnconfirmed: failure === undefined || implicatesUnconfirmed,
       });
     }
     return record;
