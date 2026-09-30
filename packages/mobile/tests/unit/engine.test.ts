@@ -530,7 +530,7 @@ describe('lifecycle', () => {
     const signal = new AbortController().signal;
     const h = harness({ appPath: './build/app.apk', platform: 'android' }, false);
     h.fake.respond('apps.install', () => ({
-      app: 'dev.example.app',
+      app: '/project/build/app.apk',
       appPath: '/project/build/app.apk',
       platform: 'android',
       appId: 'dev.example.app',
