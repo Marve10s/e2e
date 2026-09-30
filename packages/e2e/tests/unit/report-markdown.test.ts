@@ -717,6 +717,26 @@ describe('renderMarkdownReport evidence paths', () => {
   });
 });
 
+describe('an interrupted run', () => {
+  const cut = named({
+    title: 'cut short',
+    status: 'interrupted',
+    attempts: [attempt({ status: 'interrupted', error: { code: 'INTERRUPTED', message: 'run interrupted in phase body' } })],
+  });
+
+  it('counts an interrupted test apart from failures and gives it no failure block', () => {
+    const body = renderMarkdownReport(page({ status: 'interrupted', results: [passing, cut] }));
+    expect(body.startsWith('### ⏹️ e2e: 1 interrupted, 1 passed\n')).toBe(true);
+    expect(body).not.toContain('INTERRUPTED');
+    expect(body).toContain('| ⏹️ | cut short |');
+  });
+
+  it('stays red when the run failed before it was stopped', () => {
+    const body = renderMarkdownReport(page({ status: 'interrupted', results: [failing, cut] }));
+    expect(body.startsWith('### 🔴 e2e: 1 failed, 1 interrupted\n')).toBe(true);
+  });
+});
+
 describe('markdownReporter', () => {
   const dirs: string[] = [];
   afterAll(() => {
@@ -771,6 +791,15 @@ describe('markdownReporter', () => {
     expect(text.startsWith('# ✗ members › an email invitation is accepted by the invited account only\n')).toBe(true);
     expect(text).toContain('## Steps');
     expect(text).toContain('- screenshot `.e2e/artifacts/t/attempt-0/screenshot-1.bin`');
+  });
+
+  it('writes no page for an interrupted test, which reached no verdict', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'e2e-markdown-'));
+    dirs.push(root);
+    const cut = named({ title: 'cut short', status: 'interrupted', attempts: [attempt({ status: 'interrupted' })] });
+    const rows = await markdownReporter.onRunFinished!(finished(page({ status: 'interrupted', results: [passing, cut] }), root), new AbortController().signal);
+    expect(rows).toEqual([{ label: 'Markdown', text: path.join('.e2e', 'summary.md') }]);
+    expect(readdirSync(path.join(root, '.e2e'))).toEqual(['summary.md']);
   });
 
   it('writes nothing when the report itself was not written', async () => {

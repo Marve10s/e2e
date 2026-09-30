@@ -187,7 +187,27 @@ describe('renderJunitReport', () => {
       }),
     );
     expect(xml).toContain('<failure message="timed-out" type="timed-out">timed-out</failure>');
-    expect(xml).toContain('<error message="interrupted" type="interrupted">interrupted</error>');
+    expect(xml).toContain('<skipped message="interrupted: the run was stopped"/>');
+  });
+
+  it('renders an interrupted result as skipped with why, never as a failure or an error', () => {
+    const xml = render(
+      reportDocument({
+        results: [
+          reportResult({
+            status: 'interrupted',
+            attempts: [
+              reportAttempt({
+                status: 'interrupted',
+                error: { category: 'interrupted', code: 'INTERRUPTED', message: 'run interrupted in phase body', retryable: false },
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(xml).toContain('<skipped message="interrupted: run interrupted in phase body"/>');
+    expect(rootAttributes(xml)).toMatchObject({ tests: '1', failures: '0', errors: '0', skipped: '1' });
   });
 
   it('renders skipped results with their reason and no attempt time', () => {

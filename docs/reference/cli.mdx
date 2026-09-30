@@ -477,8 +477,8 @@ bunx e2e run --reporter list,junit
 | --- | --- |
 | `list` | Terminal progress, failures with code frames, and a run summary. On a TTY, live progress includes the current agent step, model turns, tool calls, and reasoning excerpts. Untrusted fields are capped at 8 KiB and stripped of control characters. |
 | `json` | The report document to stdout and nothing else there, so `e2e run --reporter json \| jq` works. Same document as `<output>/report.json`, described by `schema/report-v1.schema.json` in the package. The shape changes only with the `schemaVersion` field (`report-1` today). Cannot be combined with `list`. |
-| `junit` | `junit.xml` beside the report. One `<testsuite>` per file, one `<testcase>` per test-target pair named `title > path [target]`. A test-class error is a `<failure>`, any other an `<error>`, a skip a `<skipped>` with its reason. Run-level errors form a `run` suite. |
-| `markdown` | `summary.md` beside the report with counts, cost, errors, and failure details. Failed and flaky tests also get a page under `failures/` there, with steps, model turns, and the screen at failure. Exploration runs show findings. [`@e2e-dev/github`](/github) uses this summary for pull request comments. |
+| `junit` | `junit.xml` beside the report. One `<testsuite>` per file, one `<testcase>` per test-target pair named `title > path [target]`. A test-class error is a `<failure>`, any other an `<error>`, a skip a `<skipped>` with its reason. An interrupted test reached no verdict, so it is a `<skipped>` whose message starts `interrupted:`. Run-level errors form a `run` suite. |
+| `markdown` | `summary.md` beside the report with counts, cost, errors, and failure details. Failed and flaky tests also get a page under `failures/` there, with steps, model turns, and the screen at failure. Interrupted tests are counted on their own and get no page. Exploration runs show findings. [`@e2e-dev/github`](/github) uses this summary for pull request comments. |
 
 Every run that gets to its tests writes `report.json` under the [output directory](/reference/config#output)
 (`.e2e` by default) whatever the reporters are, and the reporters' files
@@ -487,6 +487,16 @@ beside it. A run that stops before (a config or collection error,
 fails to start, an interrupt) writes none of them and leaves the previous
 run's files in place; its errors are on the terminal and in the exit code. A `junit.xml` or `summary.md` that could not be written is a
 line on stderr, never a run error.
+
+`run.summary` in the report counts the results. `discovered` is every
+test-target pair the runner collected and `selected` the ones this run
+chose; the selection's left-out pairs are in `results` as `selected: false`
+but in no other count. `passed`, `failed` (timed out included),
+`interrupted`, `flaky`, and `skipped` count the selected results and add up
+to `selected`. `interrupted` is a test the run stopped before its verdict
+(a signal, `--max-failures`, or a run-level error such as
+`MODEL_UNAVAILABLE`), never a failure. `executed` is the selected
+results that ran at least one attempt.
 
 With `--ai-trace`, the run also writes `<output>/ai-trace.json`: one entry per
 model round trip with the exact prompt, tool definitions, response, usage,
@@ -508,7 +518,9 @@ Signals escalate.
    any test starts (during collection, an engine's `prepare`, or app
    startup) writes no report and leaves the previous one in place.
 2. A second signal forces. Workers dispose their engines at once and are
-   killed when the cleanup budget is spent. The report is still written.
+   killed when the cleanup budget is spent. The report is still written,
+   and so are `junit.xml` and `summary.md`; a custom reporter's
+   `onRunFinished` is abandoned.
 3. A third signal exits on the spot, after killing the process groups of every
    app command the run started. A process attached through
    `reuseExisting` is left alone.

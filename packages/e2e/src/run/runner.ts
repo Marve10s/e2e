@@ -1043,12 +1043,21 @@ function resultExitCodes(results: readonly ResultRecord[]): number[] {
 class ReporterAbandoned extends Error {}
 
 /**
+ * The built-in reporters that write files beside `report.json`. A forced
+ * interrupt never abandons them: they are local writes, and giving one up
+ * would leave the previous run's `summary.md` or `junit.xml` beside this
+ * run's report, where CI reads it as this run's.
+ */
+const FILE_REPORTERS: ReadonlySet<Reporter> = new Set([STATELESS_REPORTERS.junit, STATELESS_REPORTERS.markdown]);
+
+/**
  * Awaits every reporter's `onRunFinished` at once, each within `timeoutMs`
- * and until a forced interrupt, and collects the summary rows they resolve
- * with. Each reporter gets a signal that aborts on either, so a well-behaved
- * one cancels its own work and leaves no handle holding the process. A
- * reporter that throws, runs out of time, or returns something other than
- * rows is one line on stderr; it can never change the run's outcome.
+ * and, except the built-in file reporters, until a forced interrupt, and
+ * collects the summary rows they resolve with. Each reporter gets a signal
+ * that aborts on either, so a well-behaved one cancels its own work and
+ * leaves no handle holding the process. A reporter that throws, runs out of
+ * time, or returns something other than rows is one line on stderr; it can
+ * never change the run's outcome.
  */
 async function runReporters(
   reporters: readonly Reporter[],
@@ -1070,8 +1079,10 @@ async function runReporters(
         timeoutMs,
       );
       const onForce = (): void => abandon.abort(new ReporterAbandoned('abandoned: the run was forced to stop'));
-      if (force.aborted) onForce();
-      else force.addEventListener('abort', onForce, { once: true });
+      if (!FILE_REPORTERS.has(reporter)) {
+        if (force.aborted) onForce();
+        else force.addEventListener('abort', onForce, { once: true });
+      }
       try {
         const result = await withAbort(
           () => Promise.resolve(onRunFinished.call(reporter, finished, abandon.signal)),

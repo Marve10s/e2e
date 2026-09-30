@@ -654,9 +654,9 @@ export class ListReporter implements Reporter {
     addCacheTally(this.runCache, cache);
     const title = this.titledAs(result.test.titlePath.join(' > '), result.agent, result.repeat);
     if (this.explore !== undefined) {
-      // The exploration's verdict is its findings; any other error is a failure of its own.
+      // The exploration's verdict is its findings; any other error is a failure of its own, unless the run stopped it.
       this.explore.result(result.attempts.flatMap((attempt) => attempt.artifacts));
-      if (error !== undefined && !this.explore.isVerdict(error)) {
+      if (error !== undefined && result.status !== 'interrupted' && !this.explore.isVerdict(error)) {
         this.failures.push({ group, title, status: result.status, error, videos, failure, screenPath });
       }
       this.window.redraw();
@@ -721,12 +721,15 @@ export class ListReporter implements Reporter {
     const symbol =
       outcome === 'failed'
         ? pc.red(F_POINTER)
-        : outcome === 'skipped'
-          ? pc.dim(pc.gray(F_DOWN))
-          : pc.green(F_CHECK);
+        : outcome === 'interrupted'
+          ? pc.yellow(F_POINTER)
+          : outcome === 'skipped'
+            ? pc.dim(pc.gray(F_DOWN))
+            : pc.green(F_CHECK);
     const state = [
       pc.dim(`${counts.total} test${counts.total === 1 ? '' : 's'}`),
       counts.failed > 0 ? pc.red(`${counts.failed} failed`) : undefined,
+      counts.interrupted > 0 ? pc.yellow(`${counts.interrupted} interrupted`) : undefined,
       counts.flaky > 0 ? pc.yellow(`${counts.flaky} flaky`) : undefined,
       counts.skipped > 0 ? pc.yellow(`${counts.skipped} skipped`) : undefined,
     ]
@@ -744,6 +747,7 @@ export class ListReporter implements Reporter {
     this.print(parts.join(' '));
     const verbose =
       counts.failed > 0 ||
+      counts.interrupted > 0 ||
       counts.flaky > 0 ||
       this.groups.size === 1 ||
       (this.live && group.lines.some((line) => line.steps.length > 0));
@@ -774,6 +778,8 @@ export class ListReporter implements Reporter {
             : pc.dim(pc.gray(` [${line.skipReason}]`));
         return [`   ${pc.dim(pc.gray(F_DOWN))} ${line.title}${reason}`];
       }
+      case 'interrupted':
+        return [`   ${pc.yellow(F_CROSS)} ${line.title} ${pc.yellow('(interrupted)')} ${duration}${ai}`];
       default: {
         const status = line.status === 'failed' ? '' : pc.red(` (${line.status})`);
         const rows = [`   ${pc.red(`${F_CROSS} ${line.title}`)}${status} ${duration}${ai}`];

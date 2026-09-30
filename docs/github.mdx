@@ -143,7 +143,8 @@ passes:
 
 The comment covers the whole suite, not only the tests the rerun ran again.
 A test that failed and then passed shows as flaky, a test that failed twice
-stays failed, and the rest keep their first-pass results. The comment
+stays failed, one that was interrupted and then passed shows as passed, and
+the rest keep their first-pass results. The comment
 matches the job's status: it stays red when another filter kept a failed
 test out of the rerun.
 

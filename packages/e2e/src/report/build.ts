@@ -319,12 +319,20 @@ export interface ReportUsage {
   estimatedCostUsd?: number;
 }
 
+/**
+ * The run's counts by result. `passed`, `failed` (timed out included),
+ * `interrupted`, `flaky`, and `skipped` count selected results only and add
+ * up to `selected`; `discovered` minus `selected` is what the selection left
+ * out.
+ */
 export interface ReportSummary {
   discovered: number;
   selected: number;
   executed: number;
   passed: number;
   failed: number;
+  /** Stopped by the run (a signal, `--max-failures`, a run-level error) before reaching a verdict; never counted as failed. */
+  interrupted: number;
   flaky: number;
   skipped: number;
 }
@@ -503,19 +511,21 @@ function serializeTarget(
   };
 }
 
-/** Computes report-1 summary counts from results. */
+/** Computes report-1 summary counts from results; the status counts are over the selected ones. */
 function computeSummary(results: readonly ResultRecord[]): ReportSummary {
   let selected = 0;
   let executed = 0;
   let passed = 0;
   let failed = 0;
+  let interrupted = 0;
   let flaky = 0;
   let skipped = 0;
   for (const result of results) {
-    if (result.selected) selected += 1;
     if (result.attempts.length > 0 || (result.serialGroupId !== undefined && result.status !== 'skipped')) {
       executed += 1;
     }
+    if (!result.selected) continue;
+    selected += 1;
     switch (result.status) {
       case 'passed':
         passed += 1;
@@ -525,15 +535,17 @@ function computeSummary(results: readonly ResultRecord[]): ReportSummary {
         break;
       case 'failed':
       case 'timed-out':
-      case 'interrupted':
         failed += 1;
+        break;
+      case 'interrupted':
+        interrupted += 1;
         break;
       case 'skipped':
         skipped += 1;
         break;
     }
   }
-  return { discovered: results.length, selected, executed, passed, failed, flaky, skipped };
+  return { discovered: results.length, selected, executed, passed, failed, interrupted, flaky, skipped };
 }
 
 /**

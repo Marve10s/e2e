@@ -171,7 +171,7 @@ prints. All reporters run concurrently, each with a one-minute deadline.
 A timeout, exception, or invalid return value is reported on stderr without
 changing the run's status, exit code, or report.
 
-One Ctrl-C still lets reporters finish. A second Ctrl-C stops waiting for them.
+One Ctrl-C still lets reporters finish. A second Ctrl-C stops waiting for them, except the built-in `junit` and `markdown`, which still write their files so none of the previous run's is left beside the new report.
 
 The second argument is an `AbortSignal` that aborts when the budget runs out
 or the run is forced to stop. Hand it to every request and timer, or an

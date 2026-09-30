@@ -570,13 +570,14 @@
     "summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["discovered", "selected", "executed", "passed", "failed", "flaky", "skipped"],
+      "required": ["discovered", "selected", "executed", "passed", "failed", "interrupted", "flaky", "skipped"],
       "properties": {
         "discovered": { "type": "integer", "minimum": 0 },
         "selected": { "type": "integer", "minimum": 0 },
         "executed": { "type": "integer", "minimum": 0 },
         "passed": { "type": "integer", "minimum": 0 },
         "failed": { "type": "integer", "minimum": 0 },
+        "interrupted": { "type": "integer", "minimum": 0 },
         "flaky": { "type": "integer", "minimum": 0 },
         "skipped": { "type": "integer", "minimum": 0 }
       }

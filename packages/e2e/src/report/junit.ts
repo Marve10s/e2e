@@ -83,10 +83,9 @@ function addCounts(total: SuiteCounts, part: SuiteCounts): void {
   total.timeMs += part.timeMs;
 }
 
-/** `<failure>` for a product verdict, `<error>` for anything that prevented one. */
-function verdictElement(error: ReportError | undefined, status: ReportResult['status']): 'failure' | 'error' {
-  if (error !== undefined) return error.category === 'test' ? 'failure' : 'error';
-  return status === 'interrupted' ? 'error' : 'failure';
+/** `<failure>` for a product verdict, `<error>` for anything else that prevented one. */
+function verdictElement(error: ReportError | undefined): 'failure' | 'error' {
+  return error === undefined || error.category === 'test' ? 'failure' : 'error';
 }
 
 function errorBody(error: ReportError): string {
@@ -117,17 +116,17 @@ function renderResult(result: ReportResult, groups: ReadonlyMap<string, ReportSe
       };
     }
     case 'skipped':
+    case 'interrupted': {
+      // JUnit has no interrupted outcome; a test the run stopped reached no verdict, so it reads as skipped with why.
+      const message = result.status === 'skipped' ? (result.skip?.reason ?? 'skipped') : `interrupted: ${final.final.error?.message ?? 'the run was stopped'}`;
       return {
-        lines: [
-          `${open}>`,
-          `  <skipped ${attributes({ message: result.skip?.reason ?? 'skipped' })}/>`,
-          '</testcase>',
-        ],
+        lines: [`${open}>`, `  <skipped ${attributes({ message })}/>`, '</testcase>'],
         outcome: 'skipped',
         durationMs: final.durationMs,
       };
+    }
     default: {
-      const element = verdictElement(final.final.error, result.status);
+      const element = verdictElement(final.final.error);
       const error = final.final.error;
       const message = error?.message ?? result.status;
       const type = error?.code ?? result.status;

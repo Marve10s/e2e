@@ -216,6 +216,7 @@ export function runCompletedEvent(report: Report1Document, flags: readonly strin
       tests_executed: run.summary.executed,
       tests_passed: run.summary.passed,
       tests_failed: run.summary.failed,
+      tests_interrupted: run.summary.interrupted,
       tests_flaky: run.summary.flaky,
       tests_skipped: run.summary.skipped,
       attempts_total: attempts.reduce((total, count) => total + count, 0),

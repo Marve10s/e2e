@@ -72,6 +72,14 @@ describe.each(schemas)('%s schema', (name) => {
       }
     });
 
+    it('counts interrupted results in the summary apart from failed ones', () => {
+      const report = readJson('fixtures', 'report-v1.valid.json') as { run: { summary: Record<string, number> } };
+      expect(validate(report)).toBe(true);
+      delete report.run.summary['interrupted'];
+      expect(validate(report)).toBe(false);
+      expect(validate.errors).toEqual(expect.arrayContaining([expect.objectContaining({ keyword: 'required', params: { missingProperty: 'interrupted' } })]));
+    });
+
     it('requires judgment evidence after a model call, while allowing capture failures before one', () => {
       const report = readJson('fixtures', 'report-v1.valid.json') as {
         run: { results: { attempts: { steps: { api: string; status: string; metrics: { modelCalls: number }; observationRevision?: string; explanation?: string }[] }[] }[] };

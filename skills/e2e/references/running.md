@@ -102,11 +102,14 @@ hosted service's video by URL.
   and `run.results[]`, one per test and target: `titlePath`, `file`,
   `source`, `tags` (`[]` when none), `agent`, `repeat` (0 unless
   `--repeat-each`), `selected`, `status`, `attempts[]` of `steps[]`,
-  `artifacts[]`, `error`.
+  `artifacts[]`, `error`. `run.summary` counts the selected results:
+  `passed`, `failed` (timed out included), `interrupted` (stopped by the
+  run: a signal, `--max-failures`, a run-level error; not a failure), `flaky`, and `skipped` add up
+  to `selected`; `discovered - selected` were left out.
 - `junit`: `junit.xml` for CI summaries; `--reporter list,junit` keeps the
   terminal output.
 - `markdown` (`--reporter list,markdown`): `summary.md` plus one page per
-  failed or flaky test under `failures/`. The summary holds counts and
+  failed or flaky test under `failures/` (an interrupted test gets none). The summary holds counts and
   spend, a block per failed test (error, facts, failing step, whether every
   attempt failed alike, last model turns, screen location and closest
   nodes, the line to look at, evidence paths), the flaky tests folded
@@ -142,7 +145,8 @@ interrupted workers keeps the failures' or the error's code. Exit 2 is
 deterministic, never retry it; only exit 3 is worth a job-level retry.
 
 The first SIGINT or SIGTERM interrupts and writes the report if any test
-had started; the second forces engine teardown; the third kills the app
+had started; the second forces engine teardown and still writes the
+report, `junit.xml`, and `summary.md`; the third kills the app
 and service process groups and exits 130 at once.
 
 ## Continuous integration

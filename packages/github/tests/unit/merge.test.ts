@@ -90,7 +90,7 @@ describe('foldLastRun', () => {
     // An explicit skip stays what the run before said it was; a test the run before never had is the rerun's.
     expect(entries.get('never wanted#0')).toMatchObject({ status: 'skipped', skip: { cause: 'explicit' } });
     expect(entries.get('new since#0')).toMatchObject({ status: 'passed', selected: true });
-    expect(folded.run.summary).toMatchObject({ discovered: 5, selected: 5, executed: 4, passed: 2, flaky: 1, failed: 1, skipped: 1 });
+    expect(folded.run.summary).toMatchObject({ discovered: 5, selected: 5, executed: 4, passed: 2, flaky: 1, failed: 1, interrupted: 0, skipped: 1 });
     // The rerun decides the outcome; the start is the run before's, so the duration spans both.
     expect(folded.run.status).toBe('failed');
     expect(folded.run.startedAt).toBe(firstPass.run.startedAt);
@@ -167,6 +167,29 @@ describe('foldLastRun', () => {
     expect(folded.run.status).toBe('failed');
     expect(folded.run.exitCode).toBe(1);
     expect(renderMarkdownReport(folded)).toContain('### 🔴 e2e: 1 failed, 1 flaky');
+  });
+
+  it('counts an interrupted test apart from failures: one that passes on the rerun is not flaky, and a carried one keeps the page green', () => {
+    const interruptedAttempt = attempt({ status: 'interrupted', error: { category: 'interrupted', code: 'INTERRUPTED', message: 'run interrupted in phase test' } });
+    const before = report({
+      status: 'interrupted',
+      results: [
+        result({ title: 'A', status: 'interrupted', attempts: [interruptedAttempt] }),
+        result({ title: 'B', status: 'interrupted', attempts: [interruptedAttempt] }),
+      ],
+    });
+    const onlyA = report({
+      results: [
+        result({ title: 'A', status: 'passed', attempts: [attempt()] }),
+        result({ title: 'B', status: 'skipped', selected: false, skip: { cause: 'filtered', reason: 'title does not match --grep' } }),
+      ],
+    });
+    const folded = foldLastRun(onlyA, before);
+    expect(byTitle(folded).get('A#0')).toMatchObject({ status: 'passed' });
+    expect(byTitle(folded).get('B#0')).toMatchObject({ status: 'interrupted', selected: true });
+    expect(folded.run.summary).toMatchObject({ selected: 2, passed: 1, failed: 0, interrupted: 1, flaky: 0, skipped: 0 });
+    expect(folded.run.status).toBe('passed');
+    expect(renderMarkdownReport(folded)).toContain('### 🟢 e2e: 1 interrupted, 1 passed');
   });
 
   it('leaves the rerun alone when the run before is another project\'s', () => {

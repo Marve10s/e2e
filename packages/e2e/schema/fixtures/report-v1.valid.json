@@ -369,6 +369,7 @@
       "executed": 2,
       "passed": 1,
       "failed": 0,
+      "interrupted": 0,
       "flaky": 0,
       "skipped": 1
     },
