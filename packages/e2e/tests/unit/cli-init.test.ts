@@ -514,6 +514,9 @@ describe('e2e init', () => {
   it.each([
     ['without allowBuilds', 'packages:\n  - apps/*\n', 'packages:\n  - apps/*\n\n# '],
     ['with a block allowBuilds', 'allowBuilds:\n    sharp: false\nminimumReleaseAge: 0\n', 'allowBuilds:\n    esbuild: false\n    sharp: false\nminimumReleaseAge: 0\n'],
+    ['holding the placeholder a failed pnpm install writes', 'allowBuilds:\n  esbuild: set this to true or false\n', 'allowBuilds:\n  esbuild: false\n'],
+    ['with a comment in allowBuilds', 'allowBuilds:\n# native\n  sharp: true\n', 'allowBuilds:\n  esbuild: false\n# native\n  sharp: true\n'],
+    ['with a byte order mark', '\uFEFFallowBuilds:\n  sharp: false\n', '\uFEFFallowBuilds:\n  esbuild: false\n  sharp: false\n'],
   ])('adds esbuild to a pnpm-workspace.yaml %s and keeps the rest', async (_, before, after) => {
     writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
     writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), before);
@@ -527,7 +530,11 @@ describe('e2e init', () => {
     ['allowBuilds:\n  esbuild: true\n', false],
     ["allowBuilds:\n  'esbuild': false\n", false],
     ['dangerouslyAllowAllBuilds: true\n', false],
+    ['allowBuilds:\n# native\n  esbuild: true\n', false],
+    ['allowBuilds: { esbuild: true }\n', false],
+    ['\uFEFFdangerouslyAllowAllBuilds: true\n', false],
     ['allowBuilds: { sharp: false }\n', true],
+    ['allowBuilds: { esbuild-wasm: true }\n', true],
   ])('keeps a pnpm-workspace.yaml that reads %j (warns: %s)', async (before, warns) => {
     writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
     writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), before);

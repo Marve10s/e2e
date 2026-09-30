@@ -53,28 +53,38 @@ function findWorkspaceFile(cwd: string): string | undefined {
 }
 
 /**
- * `text` with esbuild's build decided: unchanged when `allowBuilds` names
- * esbuild or every build is allowed, the entry added to a block-style
- * `allowBuilds` or a new block appended when there is none, and undefined
- * for an inline `allowBuilds` this line-based edit cannot extend.
+ * `text` with esbuild's build decided: unchanged when `allowBuilds` sets
+ * esbuild to true or false or every build is allowed. Otherwise the entry is
+ * set to false (over the placeholder a failed pnpm install writes), added to
+ * a block-style `allowBuilds`, or appended in a new block. Undefined for an
+ * inline `allowBuilds` this line-based edit cannot extend. A byte order mark
+ * is kept and never read as part of the first key.
  */
 function withEsbuildDecided(text: string): string | undefined {
-  const newline = text.includes('\r\n') ? '\r\n' : '\n';
-  const lines = text.split(/\r?\n/);
+  const bom = text.startsWith('\uFEFF') ? '\uFEFF' : '';
+  const body = text.slice(bom.length);
+  const newline = body.includes('\r\n') ? '\r\n' : '\n';
+  const lines = body.split(/\r?\n/);
   if (lines.some((line) => /^dangerouslyAllowAllBuilds\s*:\s*true\b/.test(line))) return text;
   const header = lines.findIndex((line) => /^allowBuilds\s*:/.test(line));
   if (header === -1) {
-    const separator = text.trim() === '' ? '' : text.endsWith('\n') ? newline : `${newline}${newline}`;
-    return `${text.trim() === '' ? '' : text}${separator}${BLOCK.join(newline)}${newline}`;
+    const separator = body.trim() === '' ? '' : body.endsWith('\n') ? newline : `${newline}${newline}`;
+    return `${bom}${body.trim() === '' ? '' : body}${separator}${BLOCK.join(newline)}${newline}`;
   }
   const inline = lines[header]!.replace(/^allowBuilds\s*:/, '').replace(/#.*$/, '').trim();
-  if (inline !== '') return /\besbuild\b/.test(inline) ? text : undefined;
-  const block: string[] = [];
-  for (const line of lines.slice(header + 1)) {
-    if (line.trim() !== '' && !/^\s/.test(line)) break;
-    block.push(line);
+  if (inline !== '') return /(?:^|[{,\s])(['"]?)esbuild\1\s*:\s*(?:true|false)\s*(?:[,}]|$)/.test(inline) ? text : undefined;
+  // The block runs until the next top-level key; blank lines and comments at any indentation stay inside it.
+  let end = header + 1;
+  while (end < lines.length && /^(?:\s|#|$)/.test(lines[end]!)) end += 1;
+  const entry = lines.findIndex((line, index) => index > header && index < end && /^\s+(['"]?)esbuild\1\s*:/.test(line));
+  const edited = [...lines];
+  if (entry === -1) {
+    const indent = lines.slice(header + 1, end).find((line) => line.trim() !== '' && !line.trimStart().startsWith('#'))?.match(/^\s+/)?.[0] ?? '  ';
+    edited.splice(header + 1, 0, `${indent}${ENTRY}`);
+  } else if (/:\s*(?:true|false)\s*(?:#.*)?$/.test(lines[entry]!)) {
+    return text;
+  } else {
+    edited[entry] = lines[entry]!.replace(/:.*$/, ': false');
   }
-  if (block.some((line) => /^\s+['"]?esbuild['"]?\s*:/.test(line))) return text;
-  const indent = block.find((line) => line.trim() !== '' && !line.trim().startsWith('#'))?.match(/^\s+/)?.[0] ?? '  ';
-  return [...lines.slice(0, header + 1), `${indent}${ENTRY}`, ...lines.slice(header + 1)].join(newline);
+  return `${bom}${edited.join(newline)}`;
 }
