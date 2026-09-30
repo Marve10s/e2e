@@ -544,7 +544,36 @@ describe('e2e init', () => {
     writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), before);
     await init(dir, { yes: true });
     expect(read('pnpm-workspace.yaml')).toBe(before);
-    expect(output().includes('Add "esbuild: false" under allowBuilds in pnpm-workspace.yaml')).toBe(warns);
+    expect(output().includes('Add "esbuild: false" to allowBuilds in pnpm-workspace.yaml')).toBe(warns);
+  });
+
+  it.each([
+    ['pinned by packageManager', () => writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ type: 'module', packageManager: 'pnpm@10.2.1' }))],
+    ['running init', () => vi.stubEnv('npm_config_user_agent', 'pnpm/9.15.0 npm/? node/v24.19.0 darwin arm64')],
+    ['on the PATH', () => {
+      writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+      vi.mocked(spawnSync).mockReturnValueOnce({ ...spawnResult(0), stdout: '10.34.6\n' });
+    }],
+  ])('leaves a pnpm older than 11 %s alone: it only warns, and early ones refuse a workspace file without packages', async (_, setup) => {
+    setup();
+    await init(dir, { yes: true });
+    expect(existsSync(path.join(dir, 'pnpm-workspace.yaml'))).toBe(false);
+  });
+
+  it('asks the pnpm on the PATH for its version only when neither the pin nor the invoking agent names one', async () => {
+    writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+    vi.mocked(spawnSync).mockReturnValueOnce({ ...spawnResult(0), stdout: '12.6.0\n' });
+    await init(dir, { yes: true });
+    expect(spawnSync).toHaveBeenCalledExactlyOnceWith('pnpm', ['--version'], expect.objectContaining({ cwd: dir }));
+    expect(read('pnpm-workspace.yaml')).toContain('esbuild: false');
+  });
+
+  it('stops before any write when pnpm-workspace.yaml cannot be read', async () => {
+    vi.stubEnv('npm_config_user_agent', 'pnpm/12.3.4 npm/? node/v24.19.0 darwin arm64');
+    mkdirSync(path.join(dir, 'pnpm-workspace.yaml'));
+    expect(await init(dir, { yes: true })).toMatchObject({ exitCode: 2, result: 'invalid-project' });
+    expect(output()).toContain('pnpm-workspace.yaml could not be read');
+    expect(existsSync(path.join(dir, 'e2e.config.ts'))).toBe(false);
   });
 
   it('never edits the workspace root above a pnpm project, and names what to add there', async () => {
@@ -554,7 +583,7 @@ describe('e2e init', () => {
     await init(app, { yes: true, directory: 'apps/web' });
     expect(read('pnpm-workspace.yaml')).toBe('packages:\n  - apps/*\n');
     expect(existsSync(path.join(app, 'pnpm-workspace.yaml'))).toBe(false);
-    expect(output()).toContain('Add "esbuild: false" under allowBuilds in ../../pnpm-workspace.yaml');
+    expect(output()).toContain('Add "esbuild: false" to allowBuilds in ../../pnpm-workspace.yaml');
   });
 
   it('keeps the scaffold and returns a failure when installation fails', async () => {

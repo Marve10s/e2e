@@ -6,11 +6,17 @@
  * over the JavaScript shim and prints the binary's version; the JavaScript
  * API tsx calls finds the binary in esbuild's platform package at run time.
  * So init records the build as skipped under `allowBuilds`, which pnpm reads
- * from `pnpm-workspace.yaml` and nowhere else.
+ * from `pnpm-workspace.yaml` and nowhere else. pnpm 10 and older only warn
+ * about the build, and pnpm 9 and early 10 refuse a `pnpm-workspace.yaml`
+ * without `packages`, so init leaves them alone.
  */
 
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+
+/** The first pnpm major that fails an install on an undecided build script. */
+const STRICT_BUILDS_MAJOR = 11;
 
 const WORKSPACE_FILE = 'pnpm-workspace.yaml';
 const ENTRY = 'esbuild: false';
@@ -32,17 +38,44 @@ type PnpmBuildsPlan =
  * `pnpm-workspace.yaml` already decides it, a write when the project's own
  * file is missing or can take the entry, and a manual step when the entry
  * belongs in a workspace root above the project or in an `allowBuilds` that
- * is not a block mapping.
+ * is not a block mapping. Nothing for a pnpm known to be older than 11.
+ * Throws with a message naming the file when it exists but cannot be read.
  */
-export function planPnpmBuilds(cwd: string): PnpmBuildsPlan | undefined {
+export function planPnpmBuilds(
+  cwd: string,
+  packageManagerField: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): PnpmBuildsPlan | undefined {
+  const major = pnpmMajor(cwd, packageManagerField, env);
+  if (major !== undefined && major < STRICT_BUILDS_MAJOR) return undefined;
   const found = findWorkspaceFile(cwd);
   if (found === undefined) return { kind: 'write', relative: WORKSPACE_FILE, existing: false, content: `${BLOCK.join('\n')}\n` };
-  const original = readFileSync(found, 'utf8');
+  let original: string;
+  try {
+    original = readFileSync(found, 'utf8');
+  } catch (cause) {
+    throw new Error(`${found} could not be read (${cause instanceof Error ? cause.message : String(cause)}); fix it before running e2e init`, { cause });
+  }
   const relative = path.relative(cwd, found).split(path.sep).join('/');
   const content = withEsbuildDecided(original);
   if (content === original) return undefined;
   if (content === undefined || path.dirname(found) !== path.resolve(cwd)) return { kind: 'manual', relative };
   return { kind: 'write', relative, existing: true, content };
+}
+
+/**
+ * The major of the pnpm that will install: the `packageManager` pin, else
+ * the pnpm running init (`pnpm dlx`), else `pnpm --version` on the PATH.
+ * Undefined when none of them says.
+ */
+function pnpmMajor(cwd: string, packageManagerField: string | undefined, env: NodeJS.ProcessEnv): number | undefined {
+  const pinned = packageManagerField?.match(/^pnpm@(\d+)\./)?.[1];
+  if (pinned !== undefined) return Number(pinned);
+  const invoking = env['npm_config_user_agent']?.match(/^pnpm\/(\d+)\./)?.[1];
+  if (invoking !== undefined) return Number(invoking);
+  const probe = spawnSync('pnpm', ['--version'], { cwd: existsSync(cwd) ? cwd : undefined, encoding: 'utf8', shell: process.platform === 'win32' });
+  const reported = probe.status === 0 ? String(probe.stdout).trim().match(/^(\d+)\./)?.[1] : undefined;
+  return reported === undefined ? undefined : Number(reported);
 }
 
 /** The nearest `pnpm-workspace.yaml` at or above `cwd`, the file pnpm reads its settings from. */

@@ -226,11 +226,17 @@ export async function init(cwd: string, options: InitOptions = {}): Promise<Init
   }
 
   const manager = detectPackageManager(cwd, manifest.packageManager);
-  const pnpmBuilds = manager === 'pnpm' ? planPnpmBuilds(cwd) : undefined;
+  let pnpmBuilds: ReturnType<typeof planPnpmBuilds>;
+  try {
+    pnpmBuilds = manager === 'pnpm' ? planPnpmBuilds(cwd, manifest.packageManager) : undefined;
+  } catch (cause) {
+    clack.log.error(cause instanceof Error ? cause.message : String(cause));
+    return done('invalid-project', 2);
+  }
   if (pnpmBuilds?.kind === 'write') {
     clack.log.info(`Skip esbuild's build script in ${pnpmBuilds.relative} (allowBuilds); pnpm fails an install that has not decided it`);
   } else if (pnpmBuilds?.kind === 'manual') {
-    clack.log.warn(`Add "esbuild: false" under allowBuilds in ${pnpmBuilds.relative}; pnpm install fails with ERR_PNPM_IGNORED_BUILDS until esbuild's build script is decided`);
+    clack.log.warn(`Add "esbuild: false" to allowBuilds in ${pnpmBuilds.relative}; pnpm install fails with ERR_PNPM_IGNORED_BUILDS until esbuild's build script is decided`);
   }
 
   const files = [
