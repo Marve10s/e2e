@@ -18,6 +18,7 @@ import {
 } from '../internal/errors.ts';
 import { isRuntimeSkip, type RuntimeSkip } from '../internal/skip.ts';
 import type { ExecutorAttempt } from '../agent/executor.ts';
+import { isModelUnreachable } from '../agent/error.ts';
 import { withAiTraceScope } from '../internal/ai-trace.ts';
 import { DebugTrace } from '../internal/debug.ts';
 import { timestamp, uuidv7 } from '../internal/ids.ts';
@@ -1175,16 +1176,17 @@ export class TargetExecutor implements SerialHost {
     record.durationMs = Date.now() - startedMs;
     record.steps = [...steps.all()];
 
+    // Settled only after the status is classified. An interrupted attempt
+    // implicates nothing: it writes nothing and evicts nothing, so Ctrl-C can
+    // never evict a good entry. On a failure, confirmation stops at what had
+    // been verified when the failure landed; later teardown steps prove
+    // nothing about the flow. A failure where no model answered implicates
+    // nothing unconfirmed either, so a provider outage evicts no entry.
     if (cache !== undefined && record.status !== 'interrupted') {
-      // Settled only after the status is classified: an interrupted attempt
-      // implicates nothing — it writes nothing and evicts nothing — so Ctrl-C
-      // can never evict a good entry. On a failure, confirmation stops at what
-      // had been verified when the failure landed — later teardown steps
-      // prove nothing about the flow.
-      await flushStagedTraces(
-        cache,
-        failure === undefined ? steps.lastVerifiedStepIndex : lastVerifiedAtFailure,
-      );
+      await flushStagedTraces(cache, {
+        lastVerifiedStepIndex: failure === undefined ? steps.lastVerifiedStepIndex : lastVerifiedAtFailure,
+        implicatesUnconfirmed: !isModelUnreachable(failure),
+      });
     }
     return record;
   }

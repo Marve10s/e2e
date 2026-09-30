@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startFixtureApp, type FixtureApp } from '../helpers/fixture-app.ts';
 import { assertValidReport } from '../helpers/report-schema.ts';
 import { nodeIdFor } from '../helpers/fake-loop-model.ts';
+import { createScriptedInstance } from '../helpers/scripted-model.ts';
 import { createFakeEngine, FAKE_APP_URL } from '../helpers/fake-engine.ts';
 import {
   createProject,
@@ -317,6 +318,121 @@ describe('trace cache: unconfirmed traces are withheld and poisoned entries evic
     expect(outcome.exitCode).not.toBe(0);
     expect(records.at(-1)!.calls).toBe(0);
     expect(readdirSync(cacheDir(project))).toHaveLength(0);
+  }, 240_000);
+});
+
+const PROVIDER_DOWN_ASSERT_SUITE = `import { test } from 'e2e';
+
+test('cached step increments twice', async ({ app, agent }) => {
+  await app.open();
+  await agent.act('increment the counter twice');
+  await agent.assert('the counter shows 2', { agent: 'judge' });
+});
+`;
+
+const CONFIRMED_THEN_PROVIDER_DOWN_SUITE = `import { test, expect } from 'e2e';
+
+test('cached step increments twice', async ({ app, agent, screen }) => {
+  await app.open();
+  await agent.act('increment the counter twice');
+  await expect(screen.getByRole('status')).toHaveText('2');
+  await agent.assert('the counter shows 2', { agent: 'judge' });
+});
+`;
+
+/** A model whose provider never answers: every request fails, as with a missing key or an outage. */
+const unreachableModel = createScriptedInstance('fake', 'unreachable', async () => {
+  throw new Error('401 Unauthorized: no API key was provided');
+});
+
+/** The code the named step of the only test failed with. */
+function stepErrorCode(outcome: RunOutcome, api: string): string | undefined {
+  const attempt = resultByTitle(outcome, 'cached step increments twice').attempts.at(-1)!;
+  return attempt.steps.find((candidate) => candidate.api === api)?.error?.code;
+}
+
+describe('trace cache: a model that never answered implicates nothing', () => {
+  let app: FixtureApp;
+  let project: FixtureProject;
+  const record: ExecutorRecord = { calls: 0, prefixes: [] };
+
+  beforeAll(async () => {
+    app = await startFixtureApp();
+  }, 60_000);
+
+  afterAll(async () => {
+    project?.cleanup();
+    await app?.close();
+  });
+
+  const recordEntry = async (): Promise<void> => {
+    project = createProject({ 'tests/act.e2e.ts': SUITE });
+    await runExisting(project, {
+      appUrl: app.url,
+      config: {
+        tests: 'tests/**/*.e2e.ts',
+        agents: { default: { executor: twoTapExecutor(record) } },
+        cache: 'read-write' as const,
+      },
+    });
+  };
+
+  it('keeps an entry replayed whole when a later judgment finds no model', async () => {
+    await recordEntry();
+    const recorded = entryFileState(project);
+    writeFileSync(path.join(project.dir, 'tests', 'act.e2e.ts'), PROVIDER_DOWN_ASSERT_SUITE, 'utf8');
+    const outcome = await runExisting(project, {
+      appUrl: app.url,
+      config: {
+        tests: 'tests/**/*.e2e.ts',
+        agents: { default: { executor: twoTapExecutor(record) }, judge: { model: unreachableModel } },
+        cache: 'read-write' as const,
+      },
+    });
+    expect(outcome.exitCode).not.toBe(0);
+    expect(actStep(outcome).cache?.mode).toBe('self-finalized');
+    expect(stepErrorCode(outcome, 'agent.assert')).toBe('MODEL_PROVIDER_FAILED');
+    expect(entryFileState(project)).toEqual(recorded);
+    project.cleanup();
+  }, 240_000);
+
+  it('still writes a fresh recording a check confirmed before a judgment found no model', async () => {
+    project = createProject({ 'tests/act.e2e.ts': CONFIRMED_THEN_PROVIDER_DOWN_SUITE });
+    const outcome = await runExisting(project, {
+      appUrl: app.url,
+      config: {
+        tests: 'tests/**/*.e2e.ts',
+        agents: { default: { executor: twoTapExecutor(record) }, judge: { model: unreachableModel } },
+        cache: 'read-write' as const,
+      },
+    });
+    expect(outcome.exitCode).not.toBe(0);
+    expect(actStep(outcome).cache?.mode).toBe('missed');
+    expect(stepErrorCode(outcome, 'agent.assert')).toBe('MODEL_PROVIDER_FAILED');
+    expect(readOnlyEntry(project).entry.payload.actions).toHaveLength(2);
+    project.cleanup();
+  }, 240_000);
+
+  it('keeps an entry whose replay handed off to a model that never answered', async () => {
+    await recordEntry();
+    rewriteOnlyEntry(project, (payload) => {
+      const [firstTap, secondTap] = payload.actions;
+      if (firstTap === undefined || secondTap?.name !== 'tap') throw new Error(`expected two taps, got ${JSON.stringify(payload.actions)}`);
+      return { ...payload, actions: [firstTap, { ...secondTap, target: { ...secondTap.target, name: 'No Such Button' } }] };
+    });
+    const handedOff = entryFileState(project);
+    const outcome = await runExisting(project, {
+      appUrl: app.url,
+      config: {
+        tests: 'tests/**/*.e2e.ts',
+        agents: { default: { model: unreachableModel } },
+        cache: 'read-write' as const,
+      },
+    });
+    expect(outcome.exitCode).not.toBe(0);
+    expect(actStep(outcome).cache).toMatchObject({ mode: 'agent-concluded', reason: 'target-not-found', replayedActions: 1 });
+    expect(stepErrorCode(outcome, 'agent.act')).toBe('MODEL_PROVIDER_FAILED');
+    expect(entryFileState(project)).toEqual(handedOff);
   }, 240_000);
 });
 

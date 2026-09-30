@@ -24,7 +24,7 @@ import { sleep } from '../internal/time.ts';
 import type { StepCacheInfo } from '../run/steps.ts';
 import type { JsonValue } from '../types.ts';
 import type { RecordableAction } from './actions.ts';
-import { AgentError } from './error.ts';
+import { AgentError, isAgentError, isModelUnreachable } from './error.ts';
 import { isRuntimeHardStop, type ReplayedPrefix, type StepVerdict } from './executor.ts';
 import {
   replayTrace,
@@ -64,8 +64,19 @@ export interface StepCacheOptions {
   readonly stepIndex: number;
 }
 
-/** How the step settled, as the write-side decision sees it. */
-export type StepOutcome = 'passed' | 'failed' | 'cancelled';
+/**
+ * How the step settled, as the write-side decision sees it. `no-verdict` is a
+ * step that ended without anything judging the app: it was cancelled, or no
+ * model answered (`isModelUnreachable`). Neither says the recorded flow is
+ * wrong, so neither implicates its entry.
+ */
+export type StepOutcome = 'passed' | 'failed' | 'no-verdict';
+
+/** The outcome of a step that threw `cause`. */
+export function failedStepOutcome(cause: unknown): Exclude<StepOutcome, 'passed'> {
+  if (isModelUnreachable(cause)) return 'no-verdict';
+  return isAgentError(cause) && cause.code === 'CANCELLED' ? 'no-verdict' : 'failed';
+}
 
 type HandOffReason = ReplayedPrefix['stopReason'];
 
@@ -268,13 +279,17 @@ export class StepTraceSession {
    * - failed after consuming a replay: evict. Without this, a diverged replay
    *   whose step then fails stages nothing — and the poisoned entry would
    *   replay its bad prefix on every future first attempt.
-   * - cancelled: nothing, exactly like an interrupted attempt.
+   * - no verdict (cancelled, or no model answered): nothing, exactly like an
+   *   interrupted attempt. A replay that stopped at a gap and handed off to a
+   *   model that never answered proved nothing against the recording, and one
+   *   that diverged hands off again next run, where a model that answers
+   *   re-records it.
    */
   async conclude(outcome: StepOutcome, verdictSummary: string | undefined): Promise<void> {
     const recorder = this.recorder;
     if (recorder === undefined) return;
     switch (outcome) {
-      case 'cancelled':
+      case 'no-verdict':
         return;
       case 'failed':
         // A stale recording `cache.strict` failed on stays for the next strict

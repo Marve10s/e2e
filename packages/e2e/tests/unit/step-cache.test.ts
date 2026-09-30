@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { flushStagedTraces, type AgentCacheContext } from '../../src/cache/context.ts';
 import { FileCacheStore, MAX_CACHE_WIRE_BYTES } from '../../src/cache/store.ts';
 import { buildTraceEntry, type ActionTrace, type DerivedReason, type TraceEntry } from '../../src/cache/trace.ts';
-import { recordedVerdictOf, StepTraceSession, type StepCacheHost, type StepCacheOptions } from '../../src/agent/step-cache.ts';
+import { failedStepOutcome, recordedVerdictOf, StepTraceSession, type StepCacheHost, type StepCacheOptions } from '../../src/agent/step-cache.ts';
 import { AgentError } from '../../src/agent/error.ts';
 import type { ExecutorActions } from '../../src/agent/executor.ts';
 import type { SettleMode } from '../../src/agent/settle-policy.ts';
@@ -126,6 +126,18 @@ describe('recordedVerdictOf', () => {
     const session = makeSession(context, makeHost(['/pricing', '/customers?utm=x', '/customers']));
     const verdict = await session.begin();
     expect(recordedVerdictOf(verdict!.summary!)).toBe('saw "recorded verdict: none" in the log');
+  });
+});
+
+describe('failedStepOutcome', () => {
+  it('reads a cancellation and a model that never answered as no verdict, and every other failure as failed', () => {
+    for (const code of ['CANCELLED', 'MODEL_PROVIDER_FAILED', 'MODEL_UNAVAILABLE'] as const) {
+      expect(failedStepOutcome(new AgentError(code, 'x'))).toBe('no-verdict');
+    }
+    for (const code of ['ASSERTION_FAILED', 'STEP_TIMEOUT', 'MODEL_OUTPUT_INVALID', 'CONTEXT_OVERFLOW', 'APP_UNREACHABLE'] as const) {
+      expect(failedStepOutcome(new AgentError(code, 'x'))).toBe('failed');
+    }
+    expect(failedStepOutcome(new Error('MODEL_PROVIDER_FAILED'))).toBe('failed');
   });
 });
 
@@ -439,10 +451,10 @@ describe('StepTraceSession', () => {
     expect(deleted).toEqual(['a'.repeat(64)]);
   });
 
-  it('evicts a consumed entry when the step then fails, and never on cancellation', async () => {
+  it('evicts a consumed entry when the step then fails, and never when nothing judged the app', async () => {
     for (const [outcome, expected] of [
       ['failed', ['a'.repeat(64)]],
-      ['cancelled', []],
+      ['no-verdict', []],
     ] as const) {
       const deleted: string[] = [];
       const context = entryContext({ endPath: '/customers', endAnchors: [savedAnchor] });
@@ -645,7 +657,7 @@ describe('StepTraceSession', () => {
       // navigate records through the host's grammar, as the real dispatch's does.
       if (session.cacheInfo?.mode === 'missed') session.record({ name: 'navigate', url: '/customers' });
       await session.conclude('passed', verdict?.summary ?? 'opened the customers page');
-      await flushStagedTraces(current, lastVerifiedStepIndex);
+      await flushStagedTraces(current, { lastVerifiedStepIndex, implicatesUnconfirmed: true });
       return session;
     };
 
@@ -795,7 +807,7 @@ describe('flushStagedTraces and a re-recorded flow', () => {
     const flush = async (staged: ActionTrace) => {
       const current = context();
       current.staged.push({ kind: 'write', keyHash: 'c'.repeat(64), stepIndex: 0, trace: staged });
-      await flushStagedTraces(current, 1);
+      await flushStagedTraces(current, { lastVerifiedStepIndex: 1, implicatesUnconfirmed: true });
     };
 
     await flush(trace('saved the record', 10_100, 1));
@@ -840,7 +852,7 @@ describe('flushStagedTraces and a re-recorded flow', () => {
         claimKeyHash: () => 'd'.repeat(64),
         staged: [{ kind: 'write', keyHash: 'd'.repeat(64), stepIndex: 0, trace: staged }],
       };
-      await flushStagedTraces(context, 1);
+      await flushStagedTraces(context, { lastVerifiedStepIndex: 1, implicatesUnconfirmed: true });
     };
 
     // An entry recorded before gaps carried their rule, then live runs whose

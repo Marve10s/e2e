@@ -162,7 +162,8 @@ investigate a replay failure. Pair it with `--ai-trace` to capture every
 model call in the flow.
 
 Do not edit recordings by hand. A failed read-write run removes implicated
-entries so a later verified run can replace them. See
+entries so a later verified run can replace them. A failure where no model
+answered implicates nothing and removes none. See
 [Caching agent steps](/cache).
 
 <CardGroup cols={2}>

@@ -18,12 +18,13 @@ export type BlockedCategory =
 
 /**
  * The single source of truth for the closed agent code set: exit/result class
- * for every code, plus the blocked category for codes a `blocked` verdict may
- * carry. The model never selects a code, a category, or a blocked category —
- * everything derives from this table.
+ * for every code, the blocked category for codes a `blocked` verdict may
+ * carry, and whether the code means no model answered at all. The model never
+ * selects a code, a category, or a blocked category — everything derives from
+ * this table.
  */
 export const AGENT_CODE_TABLE: Readonly<
-  Record<AgentErrorCode, { category: ErrorCategory; blockedCategory?: BlockedCategory }>
+  Record<AgentErrorCode, { category: ErrorCategory; blockedCategory?: BlockedCategory; modelUnreachable?: true }>
 > = {
   AUTH_CREDENTIAL_UNAVAILABLE: { category: 'configuration', blockedCategory: 'credentials' },
   AUTH_CREDENTIAL_INVALID: { category: 'configuration', blockedCategory: 'credentials' },
@@ -35,12 +36,12 @@ export const AGENT_CODE_TABLE: Readonly<
   TEST_SETUP_FAILED: { category: 'configuration', blockedCategory: 'test_setup' },
   APP_NOT_OPEN: { category: 'test', blockedCategory: 'test_setup' },
   POLICY_DENIED: { category: 'configuration', blockedCategory: 'test_setup' },
-  MODEL_UNAVAILABLE: { category: 'configuration', blockedCategory: 'automation' },
+  MODEL_UNAVAILABLE: { category: 'configuration', blockedCategory: 'automation', modelUnreachable: true },
   AUTOMATION_UNSUPPORTED: { category: 'test', blockedCategory: 'automation' },
   STEP_BUDGET_EXHAUSTED: { category: 'test', blockedCategory: 'automation' },
   STEP_TIMEOUT: { category: 'test', blockedCategory: 'automation' },
   CONTEXT_OVERFLOW: { category: 'test', blockedCategory: 'automation' },
-  MODEL_PROVIDER_FAILED: { category: 'infrastructure' },
+  MODEL_PROVIDER_FAILED: { category: 'infrastructure', modelUnreachable: true },
   CANCELLED: { category: 'infrastructure' },
   AUTHENTICATION_FAILED: { category: 'test' },
   MODEL_OUTPUT_INVALID: { category: 'test' },
@@ -62,7 +63,27 @@ export const CATEGORY_BY_CODE: Readonly<Record<AgentErrorCode, ErrorCategory>> =
     Object.entries(AGENT_CODE_TABLE).map(([code, entry]) => [code, entry.category]),
   ) as Record<AgentErrorCode, ErrorCategory>;
 
-/** The blocked category a code names, or undefined when it is not blockable. */
+/** The codes that mean no model answered; derived from the one table. */
+const MODEL_UNREACHABLE_CODES: ReadonlySet<string> = new Set(
+  Object.entries(AGENT_CODE_TABLE)
+    .filter(([, entry]) => entry.modelUnreachable === true)
+    .map(([code]) => code),
+);
+
+/**
+ * True when a failure means no model answered: none was configured, the
+ * provider returned an error (a rejected or missing key, a rate limit, a
+ * 5xx), or the stall guard cut off a request that got no response. Such a
+ * failure is a verdict on the model's reachability, never on the app, so it
+ * implicates no recorded flow. A model that answered with something unusable
+ * (`MODEL_OUTPUT_INVALID`, `CONTEXT_OVERFLOW`) or a step that ran out of time
+ * (`STEP_TIMEOUT`, even while a request was open) is not this: the screen the
+ * model was shown may be what went wrong.
+ */
+export function isModelUnreachable(error: unknown): boolean {
+  if (!(error instanceof E2EError) && !isAgentError(error)) return false;
+  return MODEL_UNREACHABLE_CODES.has(error.code);
+}
 
 /** Cross-realm identity marker, mirroring `internal/errors.ts`. */
 const AGENT_ERROR_MARKER = Symbol.for('e2e.agent-error.v1');

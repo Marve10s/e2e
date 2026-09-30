@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import { ConfigurationError } from '../internal/errors.ts';
 import { withAbort, withTimeout } from '../internal/time.ts';
 import type { ActOptions, ActResult, AgentErrorCode, JsonValue, ModelInstance, Secret } from '../types.ts';
-import { AgentError, CATEGORY_BY_CODE, isAgentError, toAgentError } from './error.ts';
+import { AgentError, CATEGORY_BY_CODE, toAgentError } from './error.ts';
 import { validateActOptions, validateInstruction, validateParams, validateVerdict } from './act-validation.ts';
 import { ActionDispatcher } from './action-dispatcher.ts';
 import { resolveBoundedBudget, resolveTimeout } from './call-options.ts';
@@ -37,7 +37,7 @@ import { recordPolicyEvent } from './phases.ts';
 import type { ObservedScreen } from './replay.ts';
 import { OperationQueue } from './operation-queue.ts';
 import { StepAccounting } from './step-accounting.ts';
-import { StepTraceSession, type StepCacheHost, type StepOutcome } from './step-cache.ts';
+import { failedStepOutcome, StepTraceSession, type StepCacheHost, type StepOutcome } from './step-cache.ts';
 import type { ParamTemplate } from '../cache/template.ts';
 
 /** What a dispatch needs of the agent a step runs with; an interactive step supplies its own. */
@@ -156,7 +156,7 @@ export async function dispatchAgentStep(
       await dispatch.conclude('passed');
       return dispatch.result();
     } catch (cause) {
-      await dispatch.conclude(isAgentError(cause) && cause.code === 'CANCELLED' ? 'cancelled' : 'failed');
+      await dispatch.conclude(failedStepOutcome(cause));
       throw cause;
     } finally {
       dispatch.finish();

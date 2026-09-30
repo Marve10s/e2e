@@ -104,6 +104,19 @@ function flowOf(trace: ActionTrace): string {
   });
 }
 
+/** How an attempt ended, as the settlement of its staged entries reads it. */
+export interface AttemptSettlement {
+  /** Entries staged before this step index were verified, and are confirmed. */
+  readonly lastVerifiedStepIndex: number;
+  /**
+   * Whether the attempt implicates the entries it did not confirm. False when
+   * its failure is that no model answered (`isModelUnreachable`), a verdict
+   * on the provider and never on the app: unconfirmed entries are then left
+   * exactly as they are, neither written nor evicted.
+   */
+  readonly implicatesUnconfirmed: boolean;
+}
+
 /**
  * Settles the attempt's staged trace writes. A staged trace is confirmed only
  * when a verification step — a deterministic assertion or an agent judgment
@@ -115,34 +128,25 @@ function flowOf(trace: ActionTrace): string {
  * what had been verified before the failure landed. An unconfirmed trace is
  * not merely withheld: its entry is evicted, so a cached flow implicated in
  * a failure — or one that was never checked — re-records on the next pass
- * instead of replaying a poisoned state forever. The runner does not call
- * this for an interrupted attempt: interruption implicates nothing, so it
- * writes nothing and evicts nothing. An entry a step replayed whole is
- * staged too, so the same rule evicts it when nothing confirmed it; when
- * something did, it is left exactly as it was found.
+ * instead of replaying a poisoned state forever, unless the settlement says
+ * the failure implicates nothing unconfirmed. The runner does not call this
+ * for an interrupted attempt: interruption implicates nothing, so it writes
+ * nothing and evicts nothing. An entry a step replayed whole is staged too,
+ * so the same rule evicts it when nothing confirmed it; when something did,
+ * it is left exactly as it was found.
  */
-export async function flushStagedTraces(
-  context: AgentCacheContext,
-  lastVerifiedStepIndex: number,
-): Promise<void> {
+export async function flushStagedTraces(context: AgentCacheContext, settlement: AttemptSettlement): Promise<void> {
   const staged = context.staged.splice(0);
   if (context.mode !== 'read-write') return;
   for (const entry of staged) {
-    const confirmed = entry.stepIndex < lastVerifiedStepIndex;
+    const confirmed = entry.stepIndex < settlement.lastVerifiedStepIndex;
     try {
-      switch (entry.kind) {
-        case 'write':
-          if (!confirmed) {
-            await context.store.delete?.(entry.keyHash);
-            break;
-          }
-          if (await holdsSameFlow(context.store, entry.keyHash, entry.trace)) break;
-          await context.store.write(entry.keyHash, entry.trace);
-          break;
-        case 'keep':
-          if (!confirmed) await context.store.delete?.(entry.keyHash);
-          break;
+      if (!confirmed) {
+        if (settlement.implicatesUnconfirmed) await context.store.delete?.(entry.keyHash);
+        continue;
       }
+      if (entry.kind === 'keep' || (await holdsSameFlow(context.store, entry.keyHash, entry.trace))) continue;
+      await context.store.write(entry.keyHash, entry.trace);
     } catch {
       // The cache is disposable; a failed flush is a slower next run only.
     }
