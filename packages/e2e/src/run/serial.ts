@@ -125,7 +125,9 @@ export async function runSerialUnit(
     async (attemptIndex) => {
       const attempt = await runSerialAttempt(host, members, file, attemptIndex);
       group.attempts.push(attempt);
-      for (const member of attempt.members) memberFinalStatus.set(member.testId, member);
+      // A retry the run interrupted keeps the verdict before it, so each member keeps what that attempt said.
+      const cutRetry = attemptIndex > 0 && attempt.status === 'interrupted';
+      if (!cutRetry) for (const member of attempt.members) memberFinalStatus.set(member.testId, member);
       // A beforeAll failure is not retry-eligible: the
       // attempt stands as recorded and the retry loop stops here.
       if (attempt.error?.code === 'HOOK_FAILED') return undefined;

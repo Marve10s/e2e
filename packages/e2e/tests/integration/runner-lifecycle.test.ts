@@ -915,6 +915,51 @@ test('never started either', async () => {});
   );
 
   it(
+    'an interrupt during a serial group retry keeps each member\'s verdict from the attempt before it',
+    async () => {
+      const project = createProject({});
+      const marker = path.join(project.dir, 'failed-once');
+      mkdirSync(path.join(project.dir, 'tests'), { recursive: true });
+      writeFileSync(
+        path.join(project.dir, 'tests', 'flow.e2e.ts'),
+        `import { existsSync, writeFileSync } from 'node:fs';
+import { test } from 'e2e';
+test.describe('flow', { serial: true }, () => {
+  test('first step', async () => {
+    if (!existsSync(${JSON.stringify(marker)})) {
+      writeFileSync(${JSON.stringify(marker)}, '');
+      throw new Error('first attempt fails');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 60_000));
+  });
+  test('second step', async () => {});
+});
+`,
+      );
+      const controller = new AbortController();
+      // The first attempt has failed once the marker exists; the retry is then under way.
+      const watch = setInterval(() => {
+        if (!existsSync(marker)) return;
+        clearInterval(watch);
+        setTimeout(() => controller.abort(), 500);
+      }, 50);
+      const outcome = await runExisting(project, {
+        appUrl: app.url,
+        config: { tests: 'tests/**/*.e2e.ts', retries: 1 },
+        runOptions: { interruptSignal: controller.signal },
+      });
+      clearInterval(watch);
+      expect(outcome.exitCode).toBe(130);
+      expect(outcome.report.run.serialGroups[0]?.attempts.map((attempt) => attempt.status)).toEqual(['failed', 'interrupted']);
+      expect(resultByTitle(outcome, 'first step').status).toBe('failed');
+      expect(outcome.report.run.summary).toMatchObject({ failed: 1, interrupted: 0 });
+      assertValidReport(outcome.report);
+      project.cleanup();
+    },
+    120_000,
+  );
+
+  it(
     'a forced interrupt still writes the junit and markdown files, so none of the previous run is left beside the report',
     async () => {
       const project = createProject({
