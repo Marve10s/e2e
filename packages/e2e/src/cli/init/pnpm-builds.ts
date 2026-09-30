@@ -14,6 +14,8 @@ import path from 'node:path';
 
 const WORKSPACE_FILE = 'pnpm-workspace.yaml';
 const ENTRY = 'esbuild: false';
+/** The `allowBuilds` key at the top level, bare or quoted. */
+const ALLOW_BUILDS = /^(['"]?)allowBuilds\1\s*:/;
 const BLOCK = [
   "# e2e runs TypeScript through tsx, which calls esbuild's JavaScript API;",
   '# that finds the esbuild binary without the build script, so pnpm skips it.',
@@ -65,14 +67,14 @@ function withEsbuildDecided(text: string): string | undefined {
   const body = text.slice(bom.length);
   const newline = body.includes('\r\n') ? '\r\n' : '\n';
   const lines = body.split(/\r?\n/);
-  if (lines.some((line) => /^dangerouslyAllowAllBuilds\s*:\s*true\b/.test(line))) return text;
-  const header = lines.findIndex((line) => /^allowBuilds\s*:/.test(line));
+  if (lines.some((line) => /^(['"]?)dangerouslyAllowAllBuilds\1\s*:\s*(?:true|True|TRUE)\s*(?:#.*)?$/.test(line))) return text;
+  const header = lines.findIndex((line) => ALLOW_BUILDS.test(line));
   if (header === -1) {
     const separator = body.trim() === '' ? '' : body.endsWith('\n') ? newline : `${newline}${newline}`;
     return `${bom}${body.trim() === '' ? '' : body}${separator}${BLOCK.join(newline)}${newline}`;
   }
-  const inline = lines[header]!.replace(/^allowBuilds\s*:/, '').replace(/#.*$/, '').trim();
-  if (inline !== '') return /(?:^|[{,\s])(['"]?)esbuild\1\s*:\s*(?:true|false)\s*(?:[,}]|$)/.test(inline) ? text : undefined;
+  const inline = lines[header]!.replace(ALLOW_BUILDS, '').replace(/#.*$/, '').trim();
+  if (inline !== '') return /(?:^|[{,\s])(['"]?)esbuild\1\s*:\s*(?:true|True|TRUE|false|False|FALSE)\s*(?:[,}]|$)/.test(inline) ? text : undefined;
   // The block runs until the next top-level key; blank lines and comments at any indentation stay inside it.
   let end = header + 1;
   while (end < lines.length && /^(?:\s|#|$)/.test(lines[end]!)) end += 1;
@@ -81,7 +83,7 @@ function withEsbuildDecided(text: string): string | undefined {
   if (entry === -1) {
     const indent = lines.slice(header + 1, end).find((line) => line.trim() !== '' && !line.trimStart().startsWith('#'))?.match(/^\s+/)?.[0] ?? '  ';
     edited.splice(header + 1, 0, `${indent}${ENTRY}`);
-  } else if (/:\s*(?:true|false)\s*(?:#.*)?$/.test(lines[entry]!)) {
+  } else if (/:\s*(?:true|True|TRUE|false|False|FALSE)\s*(?:#.*)?$/.test(lines[entry]!)) {
     return text;
   } else {
     edited[entry] = lines[entry]!.replace(/:.*$/, ': false');
