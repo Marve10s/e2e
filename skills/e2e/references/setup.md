@@ -47,6 +47,7 @@ Without the wizard (`ai`, Vercel AI SDK v7, only for `agent.*` steps):
 
 ```bash
 npm install --save-dev e2e @e2e-dev/web playwright ai@^7
+pnpm add -D e2e @e2e-dev/web playwright ai@^7
 ```
 
 On pnpm 11+, first add `esbuild: false` to `allowBuilds` in

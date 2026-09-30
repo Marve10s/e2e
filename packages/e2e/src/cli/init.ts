@@ -249,7 +249,9 @@ export async function init(cwd: string, options: InitOptions = {}): Promise<Init
   ];
 
   if (files.length === 0 && skillInstalls.length === 0 && mcpRegistrations.length === 0 && missingIgnore.length === 0) {
-    clack.outro('Nothing to create; project already initialized');
+    clack.outro(pnpmBuilds?.kind === 'manual'
+      ? `Nothing to create; add esbuild to allowBuilds in ${pnpmBuilds.relative} before pnpm install`
+      : 'Nothing to create; project already initialized');
     return done('already-initialized', 0);
   }
 

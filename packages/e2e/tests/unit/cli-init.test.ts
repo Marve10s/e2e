@@ -568,6 +568,15 @@ describe('e2e init', () => {
     expect(read('pnpm-workspace.yaml')).toContain('esbuild: false');
   });
 
+  it('does not call a project initialized while pnpm-workspace.yaml still needs the esbuild entry', async () => {
+    vi.stubEnv('npm_config_user_agent', 'pnpm/12.3.4 npm/? node/v24.19.0 darwin arm64');
+    writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'allowBuilds: { sharp: false }\n');
+    await init(dir, { yes: true });
+    expect(await init(dir, { yes: true })).toMatchObject({ exitCode: 0, result: 'already-initialized' });
+    expect(output()).toContain('Nothing to create; add esbuild to allowBuilds in pnpm-workspace.yaml before pnpm install');
+    expect(output()).not.toContain('project already initialized');
+  });
+
   it('stops before any write when pnpm-workspace.yaml cannot be read', async () => {
     vi.stubEnv('npm_config_user_agent', 'pnpm/12.3.4 npm/? node/v24.19.0 darwin arm64');
     mkdirSync(path.join(dir, 'pnpm-workspace.yaml'));
