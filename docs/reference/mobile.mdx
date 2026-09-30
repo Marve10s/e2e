@@ -414,7 +414,10 @@ session opened. Android reads the device's foreground activity.
 `installApp` installs a build from inside a test or a fixture: the run's build once per device (no path installs `app.appPath`), or another build for an upgrade path. A plain
 install keeps the app's data; `reinstall: true` removes the app named by
 `app` (default: the pinned app) first. It resolves to the id to `openApp`
-the build by.
+the build by: the bundle id or package agent-device read from the build, else
+the `app` passed in. When agent-device reports neither, the install is
+`ENGINE_FAILURE` instead of a file path posing as an id; see
+[Troubleshooting](/mobile#troubleshooting).
 
 ```ts
 const { app } = await device.installApp('./build/MyApp.app', { reinstall: true });

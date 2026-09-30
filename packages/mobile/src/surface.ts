@@ -97,9 +97,12 @@ export interface InstalledApp {
 /** Why nothing is pinned with `appPath` alone: the install is the suite's. */
 const UNINSTALLED_BUILD = "the build the target's `app.appPath` names installed first with `device.installApp()`";
 
-/** The install fields this engine reads off agent-device's response. */
+/**
+ * The install fields this engine reads off agent-device's response. Its
+ * `app` is left out: it echoes the `app` passed in, else the identity, else
+ * the build's path, so it cannot tell an id from a file.
+ */
 interface RawInstallResult {
-  readonly app: string;
   readonly appId?: string;
   readonly bundleId?: string;
   readonly package?: string;
@@ -852,7 +855,15 @@ export class AgentDeviceSurface {
       signal,
     )) as RawInstallResult;
     const identity = result.bundleId ?? result.package ?? result.appId;
-    const installed: InstalledApp = { app: identity ?? result.app, ...(identity === undefined ? {} : { bundleId: identity }) };
+    const opensBy = identity ?? app;
+    if (opensBy === undefined) {
+      throw new EngineError(
+        'ENGINE_FAILURE',
+        `installed ${resolved}, but agent-device reported no bundle id or package for it, so nothing can open it: name the app with the target's \`app.bundleId\` or installApp's \`app\` option`,
+        { retryable: false },
+      );
+    }
+    const installed: InstalledApp = { app: opensBy, ...(identity === undefined ? {} : { bundleId: identity }) };
     // The engine's own build, installed: without `app`, this is what `app.open()` launches from here on.
     if (engineBuild) this.installedApp = installed.app;
     return installed;
@@ -1357,7 +1368,7 @@ export class AgentDeviceSurface {
 
   async restart(operation: OperationContext): Promise<void> {
     const app = this.pinnedApp;
-    if (app === undefined) throw unsupported(`app.restart needs the target's \`app.bundleId\`, or ${UNINSTALLED_BUILD}`);
+    if (app === undefined) throw unsupported(`launching the app needs the target's \`app.bundleId\`, or ${UNINSTALLED_BUILD}`);
     await this.openApp(app, { relaunch: true }, operation.signal);
   }
 

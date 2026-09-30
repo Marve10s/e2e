@@ -526,6 +526,45 @@ describe('lifecycle', () => {
     expect(h.surface.pinnedApp).toBe('com.example.app');
   });
 
+  it('pins the package an Android install reports, and refuses the build path as an app id', async () => {
+    const signal = new AbortController().signal;
+    const h = harness({ appPath: './build/app.apk', platform: 'android' }, false);
+    h.fake.respond('apps.install', () => ({
+      app: 'dev.example.app',
+      appPath: '/project/build/app.apk',
+      platform: 'android',
+      appId: 'dev.example.app',
+      package: 'dev.example.app',
+      identifiers: {},
+    }));
+    await boot(h);
+    await h.engine.startAttempt!({ attemptId: 'a1', artifactsDir, signal, resolveSecret: noSecrets });
+    expect(await h.surface.installApp(undefined, {}, signal)).toEqual({ app: 'dev.example.app', bundleId: 'dev.example.app' });
+    await h.engine.session!.restart!(operation());
+    expect(h.fake.lastArgs('apps.open')).toEqual({ app: 'dev.example.app', platform: 'android', relaunch: true });
+
+    // agent-device 0.21.18 echoes the path as `app` when it cannot read the
+    // package; that path is not something `open` can launch.
+    const unnamed = harness({ appPath: './build/app.apk', platform: 'android' }, false);
+    unnamed.fake.respond('apps.install', () => ({ app: '/project/build/app.apk', appPath: '/project/build/app.apk', platform: 'android', identifiers: {} }));
+    await boot(unnamed);
+    await unnamed.engine.startAttempt!({ attemptId: 'a1', artifactsDir, signal, resolveSecret: noSecrets });
+    await expect(unnamed.surface.installApp(undefined, {}, signal)).rejects.toMatchObject({
+      code: 'ENGINE_FAILURE',
+      message: expect.stringContaining('reported no bundle id or package'),
+    });
+    expect(unnamed.surface.pinnedApp).toBeUndefined();
+    await expect(unnamed.engine.session!.restart!(operation())).rejects.toMatchObject({
+      code: 'UNSUPPORTED_CAPABILITY',
+      message: expect.stringContaining('device.installApp()'),
+    });
+    expect(unnamed.fake.methods()).not.toContain('apps.open');
+
+    // An `app` passed in is what the build opens by, reported or not.
+    expect(await unnamed.surface.installApp(undefined, { app: 'dev.example.app' }, signal)).toEqual({ app: 'dev.example.app' });
+    expect(unnamed.surface.pinnedApp).toBe('dev.example.app');
+  });
+
   it('installs the engine build under the pinned app and device, and keeps opening the pinned app', async () => {
     const h = harness({ bundleId: 'com.example.app', appPath: '/builds/app.apk', device: 'Pixel 8', platform: 'android' });
     h.fake.respond('apps.install', () => ({ app: 'com.example.app', appPath: '/builds/app.apk', platform: 'android', identifiers: {} }));
@@ -1329,12 +1368,12 @@ describe('device fixture', () => {
     const h = harness();
     await openAttempt(h);
     h.fake.respond('apps.install', () => ({ app: './b/App.app', appPath: '/b/App.app', platform: 'ios', bundleId: 'com.example.app', identifiers: {} }));
-    h.fake.respond('apps.reinstall', () => ({ app: 'com.example.app', appPath: '/b/App.app', platform: 'ios', identifiers: {} }));
+    h.fake.respond('apps.reinstall', (args) => ({ app: (args as { app: string }).app, appPath: '/b/App.app', platform: 'ios', identifiers: {} }));
     const device = fixture(h);
     const before = h.fake.calls.length;
     expect(await device.installApp('./b/App.app')).toEqual({ app: 'com.example.app', bundleId: 'com.example.app' });
-    expect(await device.installApp('/b/App.app', { reinstall: true })).toEqual({ app: 'com.example.app' });
-    expect(await device.installApp('/b/App.app', { app: 'com.other', reinstall: true })).toEqual({ app: 'com.example.app' });
+    expect(await device.installApp('/b/App.app', { reinstall: true })).toEqual({ app: 'Settings' });
+    expect(await device.installApp('/b/App.app', { app: 'com.other', reinstall: true })).toEqual({ app: 'com.other' });
     expect(h.fake.calls.slice(before).map((call) => [call.method, call.args])).toEqual([
       ['apps.install', { platform: 'ios', appPath: '/project/b/App.app' }],
       ['apps.reinstall', { platform: 'ios', app: 'Settings', appPath: '/b/App.app' }],
