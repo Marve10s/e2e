@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assignPorts, resolveConfig } from '../../src/config/resolve.ts';
-import type { ResolvedProcessService } from '../../src/config/services.ts';
+import type { ResolvedProcessService } from '../../src/config/services/index.ts';
 import { defineEngine } from '../../src/engine/index.ts';
 import { resolveNavigationUrl } from '../../src/internal/urls.ts';
 import { defineService } from '../../src/services.ts';
@@ -103,7 +103,7 @@ describe('ports and placeholders', () => {
     name: 'web',
     executable: 'pnpm',
     args: ['dev', '--port', '{port}'],
-    env: { STRIPE_API_BASE: `${stripe.url}/v1`, SMTP_URL: mail.url('smtp'), SMTP_PORT: mail.port('smtp'), STRIPE_PORT: stripe.port },
+    env: { STRIPE_API_BASE: `${stripe.url}/v1`, SMTP_URL: mail.urlOf('smtp'), SMTP_PORT: mail.portOf('smtp'), STRIPE_PORT: stripe.port },
     readyUrl: 'http://127.0.0.1:0',
     dependsOn: [stripe, mail],
   });
@@ -146,58 +146,58 @@ describe('ports and placeholders', () => {
     );
     const loose = defineService({ name: 'loose', executable: 'x', env: { API: stripe.url }, waitForExit: true });
     expect(() => resolve([target('t', [loose, stripe])])).toThrow(
-      'service "loose".env.API uses the address of service "stripe", which service "loose" does not depend on; add it to dependsOn',
+      'service "loose".env.API uses the address of service "stripe", which service "loose" does not depend on: a service lists it in dependsOn, a target in services',
     );
   });
 
   it('refuses an address a service does not have', () => {
     const seed = defineService({ name: 'seed', start: async () => {} });
     const migrate = defineService({ name: 'migrate', executable: 'pnpm', args: ['db:migrate'], waitForExit: true });
-    const user = defineService({ name: 'user', executable: 'x', args: [seed.url, migrate.url, stripe.url('grpc')], waitForExit: true, dependsOn: [seed, migrate, stripe] });
+    const user = defineService({ name: 'user', executable: 'x', args: [seed.url, migrate.url, stripe.urlOf('grpc')], waitForExit: true, dependsOn: [seed, migrate, stripe] });
     expect(() => resolve([target('t', [user])])).toThrow('uses {service:seed.url}, but service "seed" is a function and has no address');
     const second = defineService({ name: 'user', executable: 'x', args: [migrate.url], waitForExit: true, dependsOn: [migrate] });
     expect(() => resolve([target('t', [second])])).toThrow('service "migrate" has no primary address: it comes from its readyUrl');
-    const third = defineService({ name: 'user', executable: 'x', args: [stripe.url('grpc')], waitForExit: true, dependsOn: [stripe] });
+    const third = defineService({ name: 'user', executable: 'x', args: [stripe.urlOf('grpc')], waitForExit: true, dependsOn: [stripe] });
     expect(() => resolve([target('t', [third])])).toThrow('service "stripe" declares no port "grpc"; declare it in ports');
   });
 
-  it('refuses {port} in a service whose own address asks for no free port, spelling the new form', () => {
+  it('refuses {port} in a service whose own address asks for no free port', () => {
     const fixed = defineService({ name: 'emulator', executable: 'node', args: ['emulator.js', '--app-port', '{port}'], readyUrl: 'http://127.0.0.1:7000/' });
     expect(() => resolve([target('t', [fixed])])).toThrow(
-      "service \"emulator\".args uses {port}, but service \"emulator\" has the fixed port 7000: write it directly; {port} is the service's own free port now (it used to be the app's port); to read the app's address, start the app as a service, const app = defineService({ name: 'app', executable, args: ['--port', '{port}'], readyUrl: 'http://127.0.0.1:0' }), give the target app: { url: app.url } and services: [app], and write app.port or app.url here with dependsOn: [app]",
+      'service "emulator".args uses {port}, but service "emulator" has the fixed port 7000: write it directly',
     );
     const implied = defineService({ name: 'web', executable: 'node', env: { PORT: '{port}' }, readyUrl: 'https://api.test/health' });
     expect(() => resolve([target('t', [implied])])).toThrow('service "web".env.PORT uses {port}, but service "web" has the fixed port 443: write it directly');
     const old = defineService({ name: 'emulator', executable: 'node', args: ['emulator.js', '--app-port', '{port}'], waitForExit: true });
     expect(() => resolve([target('t', [old])])).toThrow(
-      "service \"emulator\".args uses {port}, which is now the service's own free port (it used to be the app's port), and service \"emulator\" asks for none",
+      "service \"emulator\".args uses {port}, but service \"emulator\" asks for no free port: give it one with readyUrl: 'http://127.0.0.1:0'",
     );
     const namedPrimary = defineService({ name: 'mailer', executable: 'x', args: ['{port}'], ports: { http: 0 }, readyUrl: 'http://127.0.0.1:{port:http}/' });
-    expect(() => resolve([target('t', [namedPrimary])])).toThrow('service "mailer".args uses {port}, which is now the service\'s own free port');
+    expect(() => resolve([target('t', [namedPrimary])])).toThrow('service "mailer".args uses {port}, but service "mailer" asks for no free port');
     const unknownPort = defineService({ name: 'mailer', executable: 'x', args: ['{port:smtp}'], waitForExit: true, ports: { http: 0 } });
-    expect(() => resolve([target('t', [unknownPort])])).toThrow('uses {port:smtp}, but the service declares no port "smtp"; its ports are http');
+    expect(() => resolve([target('t', [unknownPort])])).toThrow('uses {port:smtp}, but service "mailer" declares no port "smtp"; its ports are http');
     const inReady = defineService({ name: 'probe', executable: 'x', readyUrl: 'http://127.0.0.1:{port}/' });
-    expect(() => resolve([target('t', [inReady])])).toThrow('service "probe".readyUrl uses {port}, but readyUrl is where the service\'s own port comes from');
+    expect(() => resolve([target('t', [inReady])])).toThrow('service "probe".readyUrl uses {port}, but service "probe" has no other address to take the port from');
     const named = defineService({ name: 'appcmd', executable: 'x', waitForExit: true });
     expect(() => resolve([target('t', [named], { url: 'http://127.0.0.1:0', command: { executable: 'x', args: ['{port:http}'] } })])).toThrow(
-      'uses a named port, which only a service declares',
+      'target "t" app.command.args uses {port:http}, but target "t" command declares no port "http"',
     );
   });
 
   it('refuses reuseExisting on a free port, which can never already answer', () => {
     const fresh = defineService({ name: 'fresh', executable: 'x', readyUrl: 'http://127.0.0.1:0', reuseExisting: true });
-    expect(() => resolve([target('t', [fresh])])).toThrow('service "fresh".reuseExisting cannot find a service already running on a free port');
+    expect(() => resolve([target('t', [fresh])])).toThrow('service "fresh".reuseExisting cannot find service "fresh" already running on a free port');
     const namedFresh = defineService({ name: 'named', executable: 'x', ports: { http: 0 }, readyUrl: 'http://127.0.0.1:{port:http}/', reuseExisting: true });
-    expect(() => resolve([target('t', [namedFresh])])).toThrow('reuseExisting cannot find a service already running on a free port');
+    expect(() => resolve([target('t', [namedFresh])])).toThrow('reuseExisting cannot find service "named" already running on a free port');
     const freeBesideFixedProbe = defineService({ name: 'mailer', executable: 'x', ports: { smtp: 0 }, readyUrl: 'http://127.0.0.1:7000/', reuseExisting: true });
-    expect(() => resolve([target('t', [freeBesideFixedProbe])])).toThrow('service "mailer".reuseExisting cannot find a service already running on a free port');
+    expect(() => resolve([target('t', [freeBesideFixedProbe])])).toThrow('service "mailer".reuseExisting cannot find service "mailer" already running on a free port');
     expect(() =>
       resolve([target('t', [], { url: 'http://127.0.0.1:0', readyUrl: 'http://127.0.0.1:3000/health', command: { executable: 'x', reuseExisting: true } })]),
-    ).toThrow('target "t" app.command.reuseExisting cannot find an app already running on a free port');
+    ).toThrow('target "t" app.command.reuseExisting cannot find target "t" command already running on a free port');
     const fixed =defineService({ name: 'fixed', executable: 'x', readyUrl: 'http://127.0.0.1:7000/', reuseExisting: true });
     expect(() => resolve([target('t', [fixed])])).not.toThrow();
     expect(() => resolve([target('t', [], { url: 'http://127.0.0.1:0', command: { executable: 'x', reuseExisting: true } })])).toThrow(
-      'target "t" app.command.reuseExisting cannot find an app already running on a free port',
+      'target "t" app.command.reuseExisting cannot find target "t" command already running on a free port',
     );
   });
 
@@ -229,7 +229,7 @@ describe('ports and placeholders', () => {
       'target "t" app.url is the address of service "web", which serves the app, and app.command would start a second process there',
     );
     expect(() => resolve([target('t', [web], { url: 'http://127.0.0.1:0', readyUrl: String(web.url), command })])).toThrow(
-      'target "t" app.readyUrl is where target "t" command is probed, its own address, so it cannot be service "web"\'s; the service serves the app, so drop app.command and write app: { url: web.url }',
+      'target "t" app.readyUrl is where target "t" command is probed, its own address, so it cannot be service "web"\'s',
     );
     expect(() => resolve([target('t', [], { url: 'http://127.0.0.1:0' })])).toThrow(
       'target "t" app.url asks for a free port (port 0), but nothing starts on it: add app.command',
@@ -237,7 +237,7 @@ describe('ports and placeholders', () => {
   });
 
   it('names the target, app.url, and the placeholder for an address a target cannot open', () => {
-    expect(() => resolve([target('t', [mail], { url: mail.url('smtp') })])).toThrow(
+    expect(() => resolve([target('t', [mail], { url: mail.urlOf('smtp') })])).toThrow(
       'target "t" app.url is {service:mail.url:smtp}, service "mail"\'s smtp address, which a target cannot open: app URL must be http(s): {service:mail.url:smtp}',
     );
   });

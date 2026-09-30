@@ -198,7 +198,7 @@ const mail = defineService({
 
 Other processes reach a service through placeholders on its handle:
 `stripe.url` is `http://127.0.0.1:<port>`, `stripe.port` the port alone, and
-`mail.url('smtp')` is `smtp://127.0.0.1:<port>`, the port name as the scheme.
+`mail.urlOf('smtp')` is `smtp://127.0.0.1:<port>`, the port name as the scheme.
 Pass them in `args` or `env`, directly or in a template literal:
 
 ```ts title="Target fragment"
@@ -207,7 +207,7 @@ app: {
   command: {
     executable: 'pnpm',
     args: ['dev'],
-    env: { STRIPE_API_BASE: `${stripe.url}/v1`, SMTP_URL: mail.url('smtp') },
+    env: { STRIPE_API_BASE: `${stripe.url}/v1`, SMTP_URL: mail.urlOf('smtp') },
   },
 },
 services: [stripe, mail],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assignPorts, resolveConfig, type PortAssignments, type ResolvedConfig } from '../../src/config/resolve.ts';
-import type { ResolvedProcessService } from '../../src/config/services.ts';
+import type { ResolvedProcessService } from '../../src/config/services/index.ts';
 import { defineEngine } from '../../src/engine/index.ts';
 import { defineService } from '../../src/services.ts';
 import type { Target, TargetApp } from '../../src/types.ts';
@@ -97,10 +97,10 @@ describe('an app command on a free port', () => {
     expect(commandOf(webOf({ url: 'http://localhost:3000', command: { executable: 'pnpm', env: { PORT: '{port}' } } })).command.env).toEqual({ PORT: '3000' });
     expect(commandOf(webOf({ url: 'https://app.test', command: { executable: 'pnpm', args: ['{port}'] } })).command.args).toEqual(['443']);
     expect(() => webOf({ command: { executable: 'npx', args: ['expo', 'start', '--port', '{port}'] }, readyUrl: 'http://127.0.0.1:8081/status' })).toThrow(
-      'target "web" app.command.args uses {port}, but the target declares no url to take the port from; the readyUrl port 8081 is fixed, so write it directly',
+      'target "web" app.command.args uses {port}, but target "web" command has the fixed port 8081: write it directly',
     );
     expect(() => webOf({ command: { executable: 'node' }, readyUrl: 'http://127.0.0.1:{port}/' })).toThrow(
-      'target "web" app.readyUrl uses {port}, but the target declares no url to take the port from',
+      'target "web" app.readyUrl uses {port}, but target "web" command has no other address to take the port from',
     );
   });
 });
@@ -133,7 +133,7 @@ describe('allocateAppPorts', () => {
 
   it("reserves every service's free ports too, keyed for the worker bootstrap", async () => {
     const mail = defineService({ name: 'mail', executable: 'mailpit', ports: { smtp: 0 }, readyUrl: 'http://127.0.0.1:0/livez' });
-    const web = defineService({ name: 'web', executable: 'pnpm', args: ['dev', '{port}'], env: { SMTP: mail.url('smtp') }, readyUrl: 'http://127.0.0.1:0', dependsOn: [mail] });
+    const web = defineService({ name: 'web', executable: 'pnpm', args: ['dev', '{port}'], env: { SMTP: mail.urlOf('smtp') }, readyUrl: 'http://127.0.0.1:0', dependsOn: [mail] });
     const declared = { shop: { url: web.url, services: [web] }, admin: { url: 'http://127.0.0.1:0', command: { executable: 'pnpm', args: ['admin'] } } };
     const allocated = await allocateAppPorts(configOf(declared));
     const { ports } = allocated;

@@ -271,7 +271,7 @@ const webServer = defineService({
   name: 'web-server',
   executable: 'pnpm',
   args: ['dev', '--port', '{port}'],
-  env: { STRIPE_API_BASE: stripe.url, SMTP_URL: mail.url('smtp') },
+  env: { STRIPE_API_BASE: stripe.url, SMTP_URL: mail.urlOf('smtp') },
   readyUrl: 'http://127.0.0.1:0',
   dependsOn: [seed, stripe, mail],
 });
@@ -289,8 +289,9 @@ export default {
   `stop`) that runs in the runner process, the counterpart of global setup
   and teardown. A throwing `start`, or one past its `startupTimeout` (60 s
   by default), fails startup with `APP_UNREACHABLE` naming the service;
-  Ctrl-C stops waiting on it at once. `stop` has `cleanupTimeout`, else
-  `CLEANUP_TIMEOUT`; a throwing `stop` is a cleanup error naming the service. Both receive
+  Ctrl-C stops waiting on it at once. `stop` has the run's `cleanupTimeout`,
+  else `CLEANUP_TIMEOUT`; a throwing `stop` is a cleanup error naming the
+  service. Both receive
   `{ signal, projectRoot, services }`, `services` holding `{ url, port, ports }`
   for every dependency by name.
 - `name` is required (letters, digits, `_`, `-`, at most 64) and one name is
@@ -307,12 +308,11 @@ export default {
   `INVALID_CONFIG`.
 - Ports: `readyUrl: 'http://127.0.0.1:0'` gives the service a free port,
   `{port}` in its own `args`, `env`, and `teardown`. `{port}` in a service on
-  a fixed port (write the port) or without a `readyUrl` is `INVALID_CONFIG`,
-  and the message spells the new form for an old service that read the
-  app's port. `ports: { smtp: 0 }` declares named ports (lowercase
+  a fixed port (write the port) or without a `readyUrl` is `INVALID_CONFIG`.
+  `ports: { smtp: 0 }` declares named ports (lowercase
   schemes), read as `{port:smtp}` in the service's own strings.
 - Placeholders: `svc.url` (`http://127.0.0.1:54321`), `svc.port`,
-  `svc.url('smtp')` (`smtp://127.0.0.1:1025`), `svc.port('smtp')`, directly or
+  `svc.urlOf('smtp')` (`smtp://127.0.0.1:1025`), `svc.portOf('smtp')`, directly or
   in a template literal, in `args`, `env`, `teardown`, and `app.url`, never in
   a `readyUrl`. A service reads only services in its `dependsOn`
   (transitively), a target's app only services in its graph.

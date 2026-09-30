@@ -25,9 +25,13 @@ export class Deadline {
     return now >= this.endsAt;
   }
 
-  /** Returns a deadline capped by another deadline. */
-  static min(a: Deadline, b: Deadline): Deadline {
-    return a.endsAt <= b.endsAt ? a : b;
+  /**
+   * A deadline that ends when the earlier of the two does, started now: the
+   * wait it times is the one beginning here, not the one the earlier
+   * deadline (an attempt's whole budget, say) was set for.
+   */
+  static min(a: Deadline, b: Deadline, now: number = Date.now()): Deadline {
+    return new Deadline(Math.min(a.endsAt, b.endsAt) - now, now);
   }
 }
 

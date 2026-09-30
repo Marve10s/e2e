@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { isCiMode, resolveConfig } from '../../src/config/resolve.ts';
 import { ConfigurationError, defineEngine } from '../../src/engine/index.ts';
 import { secrets } from '../../src/secrets.ts';
-import type { ResolvedProcessService } from '../../src/config/services.ts';
+import type { ResolvedProcessService } from '../../src/config/services/index.ts';
 import { defineService } from '../../src/services.ts';
 import type { E2EConfig, ServiceOptions, Target, TargetApp } from '../../src/types.ts';
 import { snapshot } from '../helpers/snapshot.ts';
@@ -226,10 +226,10 @@ describe('resolveConfig', () => {
     );
   });
 
-  it('takes only strings and placeholders in a command\'s args and env, naming secrets.get() for a handle', () => {
+  it('takes only strings in a command\'s args and env, naming secrets.get() for a handle', () => {
     const url = 'http://localhost:3000';
     expect(() => resolveApp({ url, command: { executable: 'node', args: ['server.mjs', 3000] } } as never)).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONFIG', message: 'target "web" app.command.args[1] must be a string or a service placeholder, got 3000' }),
+      expect.objectContaining({ code: 'INVALID_CONFIG', message: 'target "web" app.command.args[1] must be a string, got 3000' }),
     );
     expect(commandOf({ url, command: { executable: 'node', env: { PORT: '3000', UNSET: undefined } } } as never).command.env).toEqual({
       PORT: '3000',
@@ -238,7 +238,7 @@ describe('resolveConfig', () => {
       'target "web" app.command.env must be an object of variable name to string',
     );
     expect(() => resolveApp({ url, command: { executable: 'node', env: { PORT: 3000 } } } as never)).toThrow(
-      expect.objectContaining({ code: 'INVALID_CONFIG', message: 'target "web" app.command.env.PORT must be a string or a service placeholder, got 3000' }),
+      expect.objectContaining({ code: 'INVALID_CONFIG', message: 'target "web" app.command.env.PORT must be a string, got 3000' }),
     );
     expect(() => resolveApp({ url, command: { executable: 'node', env: { API_KEY: secrets.get('API_KEY') } } } as never)).toThrow(
       expect.objectContaining({
@@ -252,7 +252,7 @@ describe('resolveConfig', () => {
     expect(() => defineService({ name: 'db', executable: 'db', args: [secrets.get('db')], waitForExit: true } as never)).toThrow(
       /^service "db"\.args\[0\] must be a string, got secrets\.get\("db"\)/,
     );
-    expect(() => resolveApp({ url: secrets.get('url') } as never)).toThrow(/^target "web" app\.url must be a string, got secrets\.get\("url"\)/);
+    expect(() => resolveApp({ url: secrets.get('url') } as never)).toThrow(/^target "web" app\.url must be a non-empty string/);
     expect(() => `--token=${String(secrets.get('db'))}`).toThrow(
       expect.objectContaining({ code: 'INVALID_CONFIG', message: expect.stringContaining('secrets.get("db") is a reference to a secret, not its value') }),
     );
@@ -449,7 +449,7 @@ describe('resolveConfig', () => {
   });
 
   it('checks the shape of every app field', () => {
-    expect(() => resolveApp({ url: 5 } as never)).toThrow('target "web" app.url must be a string');
+    expect(() => resolveApp({ url: 5 } as never)).toThrow('target "web" app.url must be a non-empty string');
     expect(() => resolveApp({ bundleId: '' })).toThrow('app.bundleId must be a non-empty string');
     expect(() => resolveApp({ appPath: ' ' })).toThrow('app.appPath must be a non-empty string');
     expect(() => resolveApp({ launchArguments: ['-a', 1] } as never)).toThrow('app.launchArguments must be an array of strings');
@@ -904,7 +904,7 @@ describe('resolveConfig', () => {
         /service "x"\.teardown\.executable is required/,
       );
       expect(() => servicesOf({ name: 'x', executable: 'x', waitForExit: true, args: [1] as never })).toThrow(
-        /service "x"\.args\[0\] must be a string or a service placeholder, got 1/,
+        /service "x"\.args\[0\] must be a string, got 1/,
       );
     });
 

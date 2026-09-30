@@ -11,6 +11,7 @@ describe('web() and the target app', () => {
     expect(() => web({ url: 'http://localhost:3000' } as never)).toThrowError(
       expect.objectContaining({ code: 'INVALID_CONFIG', message: expect.stringMatching(/^web\(\) has unknown key "url"/) }),
     );
+    expect(() => web({ services: [] } as never)).toThrowError(expect.objectContaining({ message: expect.stringMatching(/^web\(\) has unknown key "services"/) }));
   });
 
   it('needs app.url on the target, and refuses the fields of an installed device app', () => {

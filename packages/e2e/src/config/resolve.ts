@@ -27,13 +27,13 @@ import type {
   CacheStore,
 } from '../types.ts';
 import { isModelInstance, resolveAgentConfig, runLimits, type ResolvedAgentConfig, type ResolvedLimits } from './agent.ts';
-import type { PortAssignments, PortRequest, ResolvedService } from './services.ts';
+import type { PortAssignments, PortRequest, ResolvedService } from './services/index.ts';
 import { bindTargets, digestTargets, resolveTargets, TARGET_NAME_PATTERN, type ResolvedTarget } from './targets.ts';
 import { credentialNamed, credentialSecretName, envName, isSecretValue, secretValueProblem } from './secrets.ts';
 
 export type { ResolvedAgentConfig, ResolvedLimits } from './agent.ts';
 export type { ResolvedApp } from './app.ts';
-export type { PortAssignments, ResolvedService } from './services.ts';
+export type { PortAssignments, ResolvedService } from './services/index.ts';
 export type { ResolvedTarget } from './targets.ts';
 
 /** A named account. */

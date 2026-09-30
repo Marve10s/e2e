@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import type { Readiness } from '../config/command.ts';
-import type { ResolvedService } from '../config/services.ts';
+import type { ResolvedFunctionService, ResolvedProcessService, ResolvedService } from '../config/services/index.ts';
 import { classifyError, E2EError, InfrastructureError } from '../internal/errors.ts';
 import { createRedactor } from '../internal/redact.ts';
 import { NEVER_ABORTS, sleep, withAbort, withScopedBudget } from '../internal/time.ts';
@@ -105,7 +105,7 @@ export class ManagedProcess {
 
   constructor(
     private readonly label: string,
-    private readonly command: CommandConfig<string>,
+    private readonly command: CommandConfig,
     private readonly projectRoot: string,
     private readonly readiness: Readiness,
     private readonly hooks: ManagedProcessHooks = {},
@@ -412,26 +412,27 @@ export interface StartServiceOptions {
 /** Marks an abandoned wait on a function service's `start`; never thrown past `startService`. */
 const START_ABANDONED = new Error('service start abandoned');
 
+/** What a service kind contributes to `startService`: how it starts, and what stops it afterwards. */
+interface ServiceLifecycle {
+  readonly start: () => Promise<void>;
+  readonly processes: AppProcesses;
+}
+
 /**
- * Starts one service and returns what stops it. A process is spawned and
- * waited on until ready; its teardown command runs after it stops, only if
- * it was spawned (never for one reused, refused as already running, or that
- * failed to spawn). A function service's `start` runs in this process under
- * its `startupTimeout`, raced with `signal`: an interrupt stops the wait at
- * once, and the service stops like one that started. A start that fails is
- * stopped before its failure surfaces as `APP_UNREACHABLE`.
+ * A function service: `start` runs in this process under its
+ * `startupTimeout`, raced with the signal, so an interrupt stops the wait at
+ * once; `stop` runs under the cleanup budget and its failure is named.
  */
-export async function startService(service: ResolvedService, options: StartServiceOptions): Promise<AppProcesses> {
+function functionService(service: ResolvedFunctionService, options: StartServiceOptions): ServiceLifecycle {
   const { projectRoot, hooks, signal } = options;
   const { label } = service;
-  let processes: AppProcesses;
-  let start: () => Promise<void>;
-  if (service.kind === 'function') {
-    const { start: begin, stop, startupTimeout } = service.template;
-    const context = (scope: AbortSignal): ServiceContext => ({ signal: scope, projectRoot, services: service.services });
-    processes = {
+  const { start: begin, stop, startupTimeout } = service.template;
+  const context = (scope: AbortSignal): ServiceContext => ({ signal: scope, projectRoot, services: service.services });
+  let started = false;
+  return {
+    processes: {
       stop: async (onFailure) => {
-        if (stop === undefined) return;
+        if (stop === undefined || !started) return;
         try {
           await withScopedBudget(
             options.cleanupTimeout,
@@ -444,11 +445,12 @@ export async function startService(service: ResolvedService, options: StartServi
           onFailure(new E2EError(failure.category, failure.code, `${label} stop failed: ${failure.message}`, { cause }));
         }
       },
-    };
-    start = async () => {
+    },
+    start: async () => {
       if (signal.aborted) return;
       const startedAt = Date.now();
       hooks.starting?.(label);
+      started = true;
       try {
         // The budget wraps the abort race, so an interrupt settles it and clears its timer at once.
         await withScopedBudget(
@@ -463,11 +465,21 @@ export async function startService(service: ResolvedService, options: StartServi
         throw new InfrastructureError('APP_UNREACHABLE', `${label} failed to start: ${classifyError(cause).message}`, { cause });
       }
       if (!signal.aborted) hooks.ready?.(label, Date.now() - startedAt, false);
-    };
-  } else {
-    const spawned = new ManagedProcess(label, service.command, projectRoot, service.readiness, hooks);
-    const { teardown } = service;
-    processes = {
+    },
+  };
+}
+
+/**
+ * A process service: spawned and waited on until ready; its teardown command
+ * runs after it stops, only if it was spawned (never for one reused, refused
+ * as already running, or that failed to spawn).
+ */
+function processService(service: ResolvedProcessService, options: StartServiceOptions): ServiceLifecycle {
+  const { projectRoot, hooks, signal } = options;
+  const spawned = new ManagedProcess(service.label, service.command, projectRoot, service.readiness, hooks);
+  const { teardown } = service;
+  return {
+    processes: {
       stop: async (onFailure) => {
         try {
           await spawned.stop();
@@ -481,9 +493,17 @@ export async function startService(service: ResolvedService, options: StartServi
           onFailure(cause);
         }
       },
-    };
-    start = () => spawned.start(signal);
-  }
+    },
+    start: () => spawned.start(signal),
+  };
+}
+
+/**
+ * Starts one service and returns what stops it. A start that fails is
+ * stopped before its failure surfaces as `APP_UNREACHABLE`.
+ */
+export async function startService(service: ResolvedService, options: StartServiceOptions): Promise<AppProcesses> {
+  const { start, processes } = service.kind === 'function' ? functionService(service, options) : processService(service, options);
   try {
     await start();
   } catch (cause) {

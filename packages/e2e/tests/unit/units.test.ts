@@ -11,7 +11,6 @@ import { decodeResult } from '../../src/run/worker/protocol.ts';
 import { encodeResult, type ResultRecord } from '../../src/run/records.ts';
 
 const EMPTY_APP: ResolvedTarget['app'] = {
-  url: undefined,
   base: undefined,
   site: undefined,
   environment: 'test',
@@ -28,6 +27,7 @@ const target: ResolvedTarget = {
   engine: undefined,
   services: [],
   app: EMPTY_APP,
+  appUrl: undefined,
   trace: { mode: 'off', source: 'default' },
   video: { mode: 'off', source: 'default' },
 };

@@ -140,8 +140,8 @@ const mail = defineService({
 const webServer = defineService({
   name: 'web-server',
   executable: 'pnpm',
-  args: ['dev', '--port', '{port}', '--smtp-port', mail.port('smtp')],
-  env: { SMTP_URL: mail.url('smtp'), MAIL_API: `${mail.url('http')}/api`, MAIL_PORT: mail.port },
+  args: ['dev', '--port', '{port}', '--smtp-port', mail.portOf('smtp')],
+  env: { SMTP_URL: mail.urlOf('smtp'), MAIL_API: `${mail.urlOf('http')}/api`, MAIL_PORT: mail.port },
   readyUrl: 'http://127.0.0.1:0',
   dependsOn: [seed, mail],
 });
@@ -155,10 +155,6 @@ const webServer = defineService({
 defineService({ name: 'both', executable: 'x', waitForExit: true, start: async () => {} });
 // @ts-expect-error a service has a name
 defineService({ executable: 'x', waitForExit: true });
-// @ts-expect-error a service's readyUrl is its own address, never another service's placeholder
-defineService({ name: 'probe', executable: 'x', readyUrl: webServer.url });
-// @ts-expect-error app.readyUrl is where app.command is probed, never a service's placeholder
-({ targets: [{ engine, app: { url: 'http://127.0.0.1:0', command: { executable: 'pnpm' }, readyUrl: webServer.url } }] }) satisfies E2EConfig;
 defineService({ name: 'seeded', startupTimeout: 120_000, start: async () => {} });
 // @ts-expect-error services are defineService handles, not the plain objects they used to be
 ({ targets: [{ engine, services: [{ name: 'db', executable: 'docker', waitForExit: true }] }] }) satisfies E2EConfig;

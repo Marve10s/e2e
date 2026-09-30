@@ -36,7 +36,6 @@ const defaultOptions: ResolvedTestOptions = {
 };
 
 const EMPTY_APP: ResolvedTarget['app'] = {
-  url: undefined,
   base: undefined,
   site: undefined,
   environment: 'test',
@@ -54,6 +53,7 @@ function makeTarget(name: string, index: number, engine?: EngineHandle): Resolve
     engine,
     services: [],
     app: EMPTY_APP,
+    appUrl: undefined,
     trace: { mode: 'off', source: 'default' },
     video: { mode: 'off', source: 'default' },
   };

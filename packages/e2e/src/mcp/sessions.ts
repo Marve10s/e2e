@@ -75,11 +75,6 @@ export class SessionRegistry<S extends NamedSession> {
     return opened;
   }
 
-  /** Whether any session beside `id` is admitted, opening, live, or closing, every one on the config `id` claimed. */
-  hasOthers(id: string): boolean {
-    return this.others(id).length > 0;
-  }
-
   /** Claims the config for an opening session before it loads, or refuses a config other than the one open sessions share. */
   claimConfig(id: string, configPath: string): void {
     const holder = this.others(id).find(([, entry]) => entry.configPath !== undefined && entry.configPath !== configPath);

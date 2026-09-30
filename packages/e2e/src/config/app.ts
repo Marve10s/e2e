@@ -14,9 +14,9 @@ import { serviceTokens, tokenOf } from '../internal/service-tokens.ts';
 import { didYouMean } from '../internal/suggest.ts';
 import { isImplicitTestHost, normalizeBaseUrl, requestsFreePort, siteOf, type NormalizedBaseUrl } from '../internal/urls.ts';
 import type { AppPermissionState, CommandConfig, TargetApp } from '../types.ts';
-import { isRecord, normalizeCommand, placeholderString } from './command.ts';
+import { isRecord, normalizeCommand } from './command.ts';
 import { httpUrl } from './validate.ts';
-import { bindTokens, checkTargetTokens, processTemplate, type ProcessTemplate, type ResolvedService, type ServiceTemplate } from './services.ts';
+import { bindTokens, checkTargetTokens, processTemplate, type ProcessTemplate, type ResolvedService, type ServiceTemplate } from './services/index.ts';
 
 /** A target's `app` as checked: every field's shape, every placeholder as its token text. */
 export interface TargetAppDeclaration {
@@ -27,7 +27,7 @@ export interface TargetAppDeclaration {
   readonly environment: 'test' | 'staging' | 'production' | undefined;
   readonly launchArguments: readonly string[] | undefined;
   readonly permissions: Readonly<Record<string, AppPermissionState>> | undefined;
-  readonly command: CommandConfig<string> | undefined;
+  readonly command: CommandConfig | undefined;
   readonly readyUrl: string | undefined;
 }
 
@@ -38,8 +38,6 @@ export interface TargetAppDeclaration {
  * declares nothing gets the empty resolution.
  */
 export interface ResolvedApp {
-  /** `app.url` as the service resolution reads it: an `app.command`'s or a service's placeholder, or the URL itself. */
-  readonly url: string | undefined;
   /** Normalized base URL on the run's ports; undefined for a surface without addressable locations. */
   readonly base: NormalizedBaseUrl | undefined;
   /**
@@ -100,10 +98,6 @@ function nonEmptyString(value: unknown, label: string): string | undefined {
   return value;
 }
 
-/** A present URL field: a string, or a placeholder read as its token. */
-function urlString(value: unknown, label: string): string | undefined {
-  return value === undefined ? undefined : placeholderString(value, label);
-}
 
 /**
  * Checks the shape of a target's `app` and hands what the engine reads of it
@@ -140,7 +134,7 @@ export function checkTargetApp(targetName: string, engine: EngineHandle | undefi
     }
   }
   const checked: TargetAppDeclaration = {
-    url: urlString(app.url, `${where}.url`),
+    url: nonEmptyString(app.url, `${where}.url`),
     bundleId: nonEmptyString(app.bundleId, `${where}.bundleId`),
     appPath: nonEmptyString(app.appPath, `${where}.appPath`),
     identity: nonEmptyString(app.identity, `${where}.identity`),
@@ -148,7 +142,7 @@ export function checkTargetApp(targetName: string, engine: EngineHandle | undefi
     launchArguments,
     permissions,
     command: app.command === undefined ? undefined : normalizeCommand(app.command, `${where}.command`),
-    readyUrl: urlString(app.readyUrl, `${where}.readyUrl`),
+    readyUrl: nonEmptyString(app.readyUrl, `${where}.readyUrl`),
   };
   const { url, bundleId, appPath } = checked;
   engine?.validateApp?.(obj({ url, bundleId, appPath, launchArguments, permissions }) satisfies EngineAppDeclaration, { targetName });
@@ -210,7 +204,6 @@ export function appProcess(
       teardown: undefined,
       serves: base,
       dependencies: graph,
-      outOfScope: `which target "${targetName}" does not list; add it to the target's services`,
     },
     templates,
     projectRoot,
@@ -254,7 +247,6 @@ export function resolveTargetApp(
   const base = url === undefined ? undefined : baseUrl(targetName, url, services);
   const hostname = base === undefined ? undefined : new URL(base.href).hostname;
   return {
-    url,
     base,
     site: hostname === undefined ? undefined : siteOf(hostname),
     environment: app.environment ?? (hostname !== undefined && !isImplicitTestHost(hostname) ? 'production' : 'test'),
@@ -266,9 +258,9 @@ export function resolveTargetApp(
   };
 }
 
-/** The app with its base URL on `services`' ports; everything else was settled without them. */
-export function bindTargetApp(targetName: string, app: ResolvedApp, services: ReadonlyMap<string, ResolvedService>): ResolvedApp {
-  return app.url === undefined ? app : { ...app, base: baseUrl(targetName, app.url, services) };
+/** The app with its base URL, `url` bound on `services`' ports; everything else was settled without them. */
+export function bindTargetApp(targetName: string, app: ResolvedApp, url: string | undefined, services: ReadonlyMap<string, ResolvedService>): ResolvedApp {
+  return url === undefined ? app : { ...app, base: baseUrl(targetName, url, services) };
 }
 
 /** What `prepare` and `init` receive about the target's app: its site policy and what a device launches. */
@@ -279,9 +271,9 @@ export function engineAppInfo(app: ResolvedApp): EngineAppInfo {
 
 /**
  * A target's app as it enters the config digest: everything but the base
- * URL, which carries the ports the run assigns. A placeholder URL digests
- * as its token; an `app.command` enters with the services, as the process
- * it is.
+ * URL, which carries the ports the run assigns (the target digests the URL
+ * as declared), and the site, which the URL implies. An `app.command` enters
+ * with the services, as the process it is.
  */
 export function digestTargetApp(app: ResolvedApp) {
   const { base: _base, site: _site, ...facts } = app;

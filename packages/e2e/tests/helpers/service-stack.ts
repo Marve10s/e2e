@@ -25,6 +25,7 @@ export function serviceStack(
   let processes: AppProcesses | undefined;
   return {
     async start(signal = new AbortController().signal) {
+      if (processes !== undefined) throw new Error('the stack is already started: stop it first');
       processes = await startDeclaredProcesses(
         config.targets,
         { ...config, cleanupTimeout: options.cleanupTimeout ?? 5_000 },

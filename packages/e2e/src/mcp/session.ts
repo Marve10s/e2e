@@ -91,10 +91,13 @@ export class SessionHost {
   /**
    * The free ports the sessions' processes were started on. A shared process
    * serves one address, and a process is shared by what it runs and the
-   * addresses of what it depends on, so a session that opens beside another
-   * reads the ports that one got; a session that opens alone gets fresh ones.
+   * addresses of what it depends on, so a session that opens while one that
+   * was assigned ports is still admitted reads the same ports; once none is
+   * left, the next session gets fresh ones.
    */
   private ports: PortAssignments = {};
+  /** The admitted sessions that were assigned `ports`; once none is left, the next session gets fresh ones. */
+  private readonly portHolders = new Set<string>();
   /** Port assignment, one session at a time, so two sessions opening at once cannot each pick their own. */
   private assigning: Promise<unknown> = Promise.resolve();
 
@@ -138,6 +141,7 @@ export class SessionHost {
   }
 
   private async teardown(live: LiveSession, reason: string): Promise<string> {
+    this.releasePorts(live.id);
     if (live.idleTimer !== undefined) clearTimeout(live.idleTimer);
     const { value, cleanupErrors } = await this.closeAttempt(live.attempt, live.abort, async () => {
       await live.step.end({ status: 'passed', summary: `session closed: ${reason}` });
@@ -197,18 +201,24 @@ export class SessionHost {
 
   /**
    * The config on the run's ports: a session is its own run, so a URL or a
-   * service address declared with port 0 gets a port here, the one the
-   * sessions already admitted read where a process they share is concerned,
-   * a free one otherwise.
+   * service address declared with port 0 gets a port here: the one the
+   * sessions still holding ports read, a free one when none does.
    */
   private assignSessionPorts(id: string, loaded: LoadedConfig): Promise<ResolvedConfig> {
     const assigned = this.assigning.then(async () => {
-      const config = await allocateAppPorts(assignPorts(loaded, this.sessions.hasOthers(id) ? this.ports : {}));
+      const config = await allocateAppPorts(assignPorts(loaded, this.portHolders.size > 0 ? this.ports : {}));
       this.ports = config.ports;
+      this.portHolders.add(id);
       return config;
     });
     this.assigning = assigned.catch(() => undefined);
     return assigned;
+  }
+
+  /** A session that leaves stops holding the ports; the last one to leave lets the next session start afresh. */
+  private releasePorts(id: string): void {
+    this.portHolders.delete(id);
+    if (this.portHolders.size === 0) this.ports = {};
   }
 
   private async openSession(id: string, options: OpenSessionOptions, request: AbortSignal | undefined): Promise<string> {
@@ -301,6 +311,7 @@ export class SessionHost {
       return text;
     } catch (cause) {
       opening.removeEventListener('abort', cancel);
+      this.releasePorts(id);
       await this.closeAttempt(attempt, abort, async () => {
         await step?.end({ status: 'failed', summary: 'opening the session failed' });
       }).catch(() => undefined);

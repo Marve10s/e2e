@@ -21,7 +21,7 @@ import {
   type PortAssignments,
   type PortRequest,
   type ResolvedService,
-} from './services.ts';
+} from './services/index.ts';
 
 export interface ResolvedTarget {
   readonly name: string;
@@ -29,8 +29,14 @@ export interface ResolvedTarget {
   readonly platform: string;
   /** Validated engine; undefined for an agent-tools-only target. */
   readonly engine: EngineHandle | undefined;
-  /** The app under test. */
+  /** The app under test, its base URL on the run's ports once they were assigned. */
   readonly app: ResolvedApp;
+  /**
+   * `app.url` as the service resolution reads it: a service's or the app
+   * command's placeholder, or the URL itself. What `bindTargets` binds on the
+   * run's ports, and what the digest keys the URL on.
+   */
+  readonly appUrl: string | undefined;
   /** The services the target needs, in start order: its own, every one they depend on, and last its `app.command`'s process. */
   readonly services: readonly string[];
   /** Which attempts on the target record a trace: `--trace`, else the target's `trace`, else the config's, else `on` (`on-first-retry` in CI). A test's own `trace` wins over it. */
@@ -120,6 +126,7 @@ export function resolveTargets(
   const targets = withProcesses.map(({ target: { declaredServices: _services, app, ...target }, url, graph }): ResolvedTarget => ({
     ...target,
     app: resolveTargetApp(target.name, app, url, services),
+    appUrl: url,
     services: graph,
   }));
   return { targets, services, portRequests: portRequests(templates.values()) };
@@ -135,7 +142,7 @@ export function bindTargets(
   ports: PortAssignments,
 ): Pick<ResolvedTargets, 'targets' | 'services'> {
   const services = bindServices([...resolved.services.values()].map((service) => service.template), ports);
-  return { services, targets: resolved.targets.map((target) => ({ ...target, app: bindTargetApp(target.name, target.app, services) })) };
+  return { services, targets: resolved.targets.map((target) => ({ ...target, app: bindTargetApp(target.name, target.app, target.appUrl, services) })) };
 }
 
 /**
@@ -149,10 +156,11 @@ export function bindTargets(
  */
 export function digestTargets(resolved: Pick<ResolvedTargets, 'targets' | 'services'>) {
   return {
-    targets: resolved.targets.map(({ name, platform, engine, app, services }) => ({
+    targets: resolved.targets.map(({ name, platform, engine, app, appUrl, services }) => ({
       name,
       platform,
       app: digestTargetApp(app),
+      appUrl,
       services,
       ...(engine === undefined
         ? {}

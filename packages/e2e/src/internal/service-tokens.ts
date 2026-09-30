@@ -8,7 +8,7 @@
 /** ASCII letters, digits, `_`, and `-`: a service name that reads unambiguously inside a placeholder. */
 export const SERVICE_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-/** A port name is a lowercase URL scheme, so `svc.url('smtp')` reads `smtp://host:port`. */
+/** A port name is a lowercase URL scheme, so `svc.urlOf('smtp')` reads `smtp://host:port`. */
 export const PORT_NAME_PATTERN = /^[a-z][a-z0-9+.-]*$/;
 
 /**

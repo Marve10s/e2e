@@ -123,7 +123,7 @@ describe('ManagedProcess stall diagnostics', () => {
   });
   const log = path.join('out', 'services.log');
   /** A budget of one second: the child prints within a few dozen ms and then the wait has to run out. */
-  const stalled = (script: string, extra: Partial<CommandConfig<string>> = {}): CommandConfig<string> => ({
+  const stalled = (script: string, extra: Partial<CommandConfig> = {}): CommandConfig => ({
     executable: process.execPath,
     args: ['-e', script],
     startupTimeout: 1_000,

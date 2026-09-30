@@ -2,7 +2,7 @@
  * `defineService`: the one identity of a process or a function a run needs
  * beside the app, and the address placeholders read off it. The handle
  * carries its options checked and normalized once, into the definition the
- * config resolution reads (`config/services.ts`); what needs the project
+ * config resolution reads (`config/services/`); what needs the project
  * root, the other services, or the run's ports is checked there.
  */
 
@@ -16,7 +16,6 @@ import type {
   CommandConfig,
   FunctionServiceOptions,
   ProcessServiceOptions,
-  ServiceAddress,
   ServiceContext,
   ServiceHandle,
   ServiceOptions,
@@ -45,7 +44,7 @@ const FUNCTION_KEYS: readonly string[] = Object.keys({
   start: true,
   stop: true,
   startupTimeout: true,
-} satisfies Record<Exclude<keyof FunctionServiceOptions, 'executable'>, true>);
+} satisfies Record<Exclude<keyof FunctionServiceOptions, 'executable' | 'readyUrl' | 'waitForExit' | 'ports' | 'teardown'>, true>);
 
 interface DefinitionBase {
   readonly name: string;
@@ -56,10 +55,10 @@ interface DefinitionBase {
 /** A process service as `defineService` normalized it: every placeholder read as its token. */
 export interface ProcessDefinition extends DefinitionBase {
   readonly kind: 'process';
-  readonly command: CommandConfig<string>;
+  readonly command: CommandConfig;
   readonly readyUrl: string | undefined;
   readonly ports: Readonly<Record<string, number>>;
-  readonly teardown: CommandConfig<string> | undefined;
+  readonly teardown: CommandConfig | undefined;
 }
 
 /** A function service as `defineService` normalized it. */
@@ -77,21 +76,12 @@ function invalid(detail: string): ConfigurationError {
   return new ConfigurationError('INVALID_CONFIG', `defineService: ${detail}`);
 }
 
-/**
- * The callable placeholder behind `svc.url` and `svc.port`: it reads as its
- * token wherever a string is expected, and called with a port name returns
- * that port's token.
- */
-function address(service: string, kind: 'url' | 'port'): ServiceAddress {
-  const token = tokenOf(service, kind);
-  const named = (port: string): string => {
-    if (typeof port !== 'string' || !PORT_NAME_PATTERN.test(port)) {
-      throw invalid(`service "${service}" ${kind}(${JSON.stringify(port)}) names no port; a port name is a lowercase scheme such as "http" or "smtp"`);
-    }
-    return tokenOf(service, kind, port);
-  };
-  Object.defineProperties(named, { toString: { value: () => token }, [Symbol.toPrimitive]: { value: () => token } });
-  return Object.freeze(named) as unknown as ServiceAddress;
+/** The placeholder for one named port of `service`, checked to be a port name. */
+function namedToken(service: string, kind: 'url' | 'port', port: string): string {
+  if (typeof port !== 'string' || !PORT_NAME_PATTERN.test(port)) {
+    throw invalid(`service "${service}" ${kind}Of(${JSON.stringify(port)}) names no port; a port name is a lowercase scheme such as "http" or "smtp"`);
+  }
+  return tokenOf(service, kind, port);
 }
 
 /** Whether a value is a `defineService` handle, from this module instance or another realm's. */
@@ -110,7 +100,7 @@ export function serviceDefinition(handle: ServiceHandle): ServiceDefinition {
  */
 export function notAServiceHandle(value: unknown, where: string): ConfigurationError {
   const described = isRecord(value)
-    ? typeof value['name'] === 'string' && typeof value['url'] === 'function'
+    ? typeof value['name'] === 'string' && typeof value['urlOf'] === 'function'
       ? `a copy of service "${value['name']}"; a spread copy is not the service, so list the handle defineService returned`
       : 'a plain object; wrap it in defineService({ name, executable, ... }) and list the handle it returns'
     : `${value === null ? 'null' : typeof value}; list the handle defineService({ name, ... }) returns`;
@@ -124,6 +114,7 @@ function processDefinition(options: ProcessServiceOptions, where: string): Omit<
   if (readyUrl !== undefined && typeof readyUrl !== 'string') {
     throw invalid(`${where}.readyUrl must be a string: it is the service's own address, never another service's placeholder`);
   }
+  if (waitForExit !== undefined && typeof waitForExit !== 'boolean') throw invalid(`${where}.waitForExit must be a boolean`);
   if ((readyUrl !== undefined) === (waitForExit === true)) {
     throw invalid(`${where} needs exactly one readiness contract: set readyUrl or waitForExit: true`);
   }
@@ -198,7 +189,13 @@ export function defineService(options: ServiceOptions): ServiceHandle {
     if (stop !== undefined && typeof stop !== 'function') throw invalid(`${where} stop must be a function`);
     definition = { ...base, kind: 'function', start, stop, startupTimeout: positiveInt(startupTimeout, `${where}.startupTimeout`, 'milliseconds') };
   }
-  const handle = { name, url: address(name, 'url'), port: address(name, 'port') };
+  const handle: Omit<ServiceHandle, typeof serviceBrand> = {
+    name,
+    url: tokenOf(name, 'url'),
+    port: tokenOf(name, 'port'),
+    urlOf: (port) => namedToken(name, 'url', port),
+    portOf: (port) => namedToken(name, 'port', port),
+  };
   Object.defineProperty(handle, serviceBrand, { value: Object.freeze(definition), enumerable: false });
   return Object.freeze(handle) as unknown as ServiceHandle;
 }
