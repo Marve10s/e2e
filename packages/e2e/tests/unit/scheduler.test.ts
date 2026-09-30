@@ -36,8 +36,8 @@ const defaultOptions: ResolvedTestOptions = {
 };
 
 const EMPTY_APP: ResolvedTarget['app'] = {
+  url: undefined,
   base: undefined,
-  portRequest: undefined,
   site: undefined,
   environment: 'test',
   identity: undefined,
@@ -45,19 +45,6 @@ const EMPTY_APP: ResolvedTarget['app'] = {
   appPath: undefined,
   launchArguments: undefined,
   permissions: undefined,
-  command: undefined,
-  readyUrl: undefined,
-};
-const EMPTY_DECLARED: ResolvedTarget['declaredApp'] = {
-  url: undefined,
-  bundleId: undefined,
-  appPath: undefined,
-  identity: undefined,
-  environment: undefined,
-  launchArguments: undefined,
-  permissions: undefined,
-  command: undefined,
-  readyUrl: undefined,
 };
 function makeTarget(name: string, index: number, engine?: EngineHandle): ResolvedTarget {
   return {
@@ -65,8 +52,8 @@ function makeTarget(name: string, index: number, engine?: EngineHandle): Resolve
     index,
     platform: 'web',
     engine,
+    services: [],
     app: EMPTY_APP,
-    declaredApp: EMPTY_DECLARED,
     trace: { mode: 'off', source: 'default' },
     video: { mode: 'off', source: 'default' },
   };

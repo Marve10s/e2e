@@ -1,16 +1,15 @@
-/** Spawned-process management for the app commands targets declare. */
+/** Spawned-process management for the commands and services targets declare, and their teardowns. */
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import type { Readiness } from '../config/command.ts';
-import { InfrastructureError } from '../internal/errors.ts';
+import type { ResolvedService } from '../config/services.ts';
+import { classifyError, E2EError, InfrastructureError } from '../internal/errors.ts';
 import { createRedactor } from '../internal/redact.ts';
-import { sleep } from '../internal/time.ts';
-import type { CommandConfig } from '../types.ts';
-
-const INHERITED_ENV = ['PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'SystemRoot', 'COMSPEC'] as const;
+import { NEVER_ABORTS, sleep, withAbort, withScopedBudget } from '../internal/time.ts';
+import type { CommandConfig, ServiceContext } from '../types.ts';
 
 /** Readiness polling starts fast and backs off; a booting server answers late, not on a schedule. */
 const READY_POLL_MIN_MS = 25;
@@ -106,7 +105,7 @@ export class ManagedProcess {
 
   constructor(
     private readonly label: string,
-    private readonly command: CommandConfig,
+    private readonly command: CommandConfig<string>,
     private readonly projectRoot: string,
     private readonly readiness: Readiness,
     private readonly hooks: ManagedProcessHooks = {},
@@ -175,9 +174,10 @@ export class ManagedProcess {
       }
       if (aborted()) return;
     }
+    // The runner's whole environment, as a dev server started from the same
+    // shell would see it, with the command's own on top.
     const env: Record<string, string> = {};
-    for (const key of INHERITED_ENV) {
-      const value = process.env[key];
+    for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
     }
     Object.assign(env, this.command.env ?? {});
@@ -387,12 +387,108 @@ export class ManagedProcess {
   }
 }
 
-/** What one started process, or everything a run or a session started, is released by. */
+/** What one started service, or everything a run or a session started, is released by. */
 export interface AppProcesses {
   /**
-   * Stops what was started, in reverse. Every failure is reported through
-   * `onFailure` and never skips the rest, so one failing stop cannot leave
-   * the others running.
+   * Stops what was started, in reverse, each process followed by its
+   * teardown command. Every failure is reported through `onFailure` and never
+   * skips the rest, so one failing stop cannot leave the others running.
    */
   stop(onFailure: (cause: unknown) => void): Promise<void>;
+}
+
+/** How `startService` reaches the run. */
+export interface StartServiceOptions {
+  readonly projectRoot: string;
+  readonly hooks: ManagedProcessHooks;
+  /** The budget of a function service's `stop`. */
+  readonly cleanupTimeout: number;
+  /** Aborts the start: an interrupt, or every session waiting on a shared one giving up. */
+  readonly signal: AbortSignal;
+  /** Where the failures of the cleanup after a failed start go: the start's own failure is the one thrown. */
+  readonly onCleanupFailure: (cause: unknown) => void;
+}
+
+/** Marks an abandoned wait on a function service's `start`; never thrown past `startService`. */
+const START_ABANDONED = new Error('service start abandoned');
+
+/**
+ * Starts one service and returns what stops it. A process is spawned and
+ * waited on until ready; its teardown command runs after it stops, only if
+ * it was spawned (never for one reused, refused as already running, or that
+ * failed to spawn). A function service's `start` runs in this process under
+ * its `startupTimeout`, raced with `signal`: an interrupt stops the wait at
+ * once, and the service stops like one that started. A start that fails is
+ * stopped before its failure surfaces as `APP_UNREACHABLE`.
+ */
+export async function startService(service: ResolvedService, options: StartServiceOptions): Promise<AppProcesses> {
+  const { projectRoot, hooks, signal } = options;
+  const { label } = service;
+  let processes: AppProcesses;
+  let start: () => Promise<void>;
+  if (service.kind === 'function') {
+    const { start: begin, stop, startupTimeout } = service.template;
+    const context = (scope: AbortSignal): ServiceContext => ({ signal: scope, projectRoot, services: service.services });
+    processes = {
+      stop: async (onFailure) => {
+        if (stop === undefined) return;
+        try {
+          await withScopedBudget(
+            options.cleanupTimeout,
+            NEVER_ABORTS,
+            () => new InfrastructureError('CLEANUP_TIMEOUT', `timed out after ${options.cleanupTimeout} ms`),
+            (scope) => stop(context(scope)),
+          );
+        } catch (cause) {
+          const failure = classifyError(cause);
+          onFailure(new E2EError(failure.category, failure.code, `${label} stop failed: ${failure.message}`, { cause }));
+        }
+      },
+    };
+    start = async () => {
+      if (signal.aborted) return;
+      const startedAt = Date.now();
+      hooks.starting?.(label);
+      try {
+        // The budget wraps the abort race, so an interrupt settles it and clears its timer at once.
+        await withScopedBudget(
+          startupTimeout,
+          signal,
+          () => new InfrastructureError('APP_UNREACHABLE', `${label} did not start within ${startupTimeout} ms`),
+          (scope) => withAbort(() => begin(context(scope)), signal, () => START_ABANDONED),
+        );
+      } catch (cause) {
+        if (cause === START_ABANDONED) return;
+        if (cause instanceof InfrastructureError && cause.code === 'APP_UNREACHABLE') throw cause;
+        throw new InfrastructureError('APP_UNREACHABLE', `${label} failed to start: ${classifyError(cause).message}`, { cause });
+      }
+      if (!signal.aborted) hooks.ready?.(label, Date.now() - startedAt, false);
+    };
+  } else {
+    const spawned = new ManagedProcess(label, service.command, projectRoot, service.readiness, hooks);
+    const { teardown } = service;
+    processes = {
+      stop: async (onFailure) => {
+        try {
+          await spawned.stop();
+        } catch (cause) {
+          onFailure(cause);
+        }
+        if (teardown === undefined || !spawned.spawned) return;
+        try {
+          await new ManagedProcess(teardown.label, teardown.command, projectRoot, { waitForExit: true }).start();
+        } catch (cause) {
+          onFailure(cause);
+        }
+      },
+    };
+    start = () => spawned.start(signal);
+  }
+  try {
+    await start();
+  } catch (cause) {
+    await processes.stop(options.onCleanupFailure);
+    throw cause;
+  }
+  return processes;
 }

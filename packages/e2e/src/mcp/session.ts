@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { loadAiSdk } from '../agent/ai-sdk.ts';
 import { openInteractiveStep, type InteractiveStep } from '../agent/interactive-step.ts';
 import { ScreenPresenter } from '../agent/screen-update.ts';
-import type { ResolvedConfig, ResolvedTarget } from '../config/resolve.ts';
+import { assignPorts, type PortAssignments, type ResolvedConfig, type ResolvedTarget } from '../config/resolve.ts';
 import { secretHandle } from '../secrets.ts';
 import { ConfigurationError, errorMessage, InfrastructureError, type SerializedError } from '../internal/errors.ts';
 import { LocatorEngine } from '../locator/engine.ts';
@@ -88,6 +88,15 @@ export class SessionHost {
   private readonly apps = new SharedAppProcesses();
   /** Aborts every open still running once the server shuts down, so none leaves a process behind. */
   private readonly shutdown = new AbortController();
+  /**
+   * The free ports the sessions' processes were started on. A shared process
+   * serves one address, and a process is shared by what it runs and the
+   * addresses of what it depends on, so a session that opens beside another
+   * reads the ports that one got; a session that opens alone gets fresh ones.
+   */
+  private ports: PortAssignments = {};
+  /** Port assignment, one session at a time, so two sessions opening at once cannot each pick their own. */
+  private assigning: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly options: SessionHostOptions) {
     this.sessions = new SessionRegistry(this.maxSessions);
@@ -186,6 +195,22 @@ export class SessionHost {
     );
   }
 
+  /**
+   * The config on the run's ports: a session is its own run, so a URL or a
+   * service address declared with port 0 gets a port here, the one the
+   * sessions already admitted read where a process they share is concerned,
+   * a free one otherwise.
+   */
+  private assignSessionPorts(id: string, loaded: LoadedConfig): Promise<ResolvedConfig> {
+    const assigned = this.assigning.then(async () => {
+      const config = await allocateAppPorts(assignPorts(loaded, this.sessions.hasOthers(id) ? this.ports : {}));
+      this.ports = config.ports;
+      return config;
+    });
+    this.assigning = assigned.catch(() => undefined);
+    return assigned;
+  }
+
   private async openSession(id: string, options: OpenSessionOptions, request: AbortSignal | undefined): Promise<string> {
     // The catalog reads the tools' schemas through the AI SDK, synchronously
     // and on every render, so the optional SDK is loaded once here: a project
@@ -197,8 +222,7 @@ export class SessionHost {
     const configPath = this.options.locateConfig(options.config);
     this.sessions.claimConfig(id, configPath);
     const loaded = await this.options.loadConfig(configPath);
-    // A session is its own run: a URL declared with port 0 gets a port here.
-    const config = await allocateAppPorts(loaded);
+    const config = await this.assignSessionPorts(id, loaded);
     const target = this.resolveTarget(config, options.target);
     this.sessions.claimEngine(id, target.name, target.engine);
     const ttlMs = this.options.ttlMs ?? SESSION_TTL_MS;
@@ -428,7 +452,7 @@ export class SessionHost {
     return defineMcpTool({
       name: 'open_session',
       description:
-        'Open a live session on one target of an e2e project: loads the config, starts the app command the target declares (if any), boots the engine (a browser, a simulator), opens the app URL, and returns the session id, the catalog of tools it can run, and the first observation. Several sessions can be open at once, one per agent, each with its own engine: pass the returned session id to every later call. Then act with call and look with call {tool: "observe"}.',
+        'Open a live session on one target of an e2e project: loads the config, starts the services and app command the target declares (if any), boots the engine (a browser, a simulator), opens the app URL, and returns the session id, the catalog of tools it can run, and the first observation. Several sessions can be open at once, one per agent, each with its own engine: pass the returned session id to every later call. Then act with call and look with call {tool: "observe"}.',
       inputSchema: z.object({
         target: z.string().min(1).optional().describe('Target name from the config; required when the config declares several'),
         config: z.string().min(1).optional().describe("Path to an e2e config file, relative to the server's directory; default: the nearest e2e.config.ts"),

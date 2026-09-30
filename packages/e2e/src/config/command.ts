@@ -1,7 +1,8 @@
 /**
- * The command a target's `app.command` is declared with: its shape checked
- * once, where it is declared, so the rest of the resolution only ever sees
- * strings.
+ * The command every spawned process is declared with, a service's or a
+ * target's `app.command`: its shape checked once, where it is declared, and
+ * every placeholder read as its token, so the rest of the resolution only
+ * ever sees strings.
  */
 
 import path from 'node:path';
@@ -9,18 +10,25 @@ import { ConfigurationError } from '../internal/errors.ts';
 import { obj } from '../internal/objects.ts';
 import { rejectUnknownKeys } from '../internal/options.ts';
 import { insideProjectRoot } from '../internal/paths.ts';
+import { serviceTokens } from '../internal/service-tokens.ts';
 import { isSecret } from '../secrets.ts';
 import type { CommandConfig } from '../types.ts';
 import { describeValue, positiveInt } from './validate.ts';
 
 /**
  * How a spawned process counts as ready: a URL that answers, or the process
- * itself exiting with code 0.
+ * itself exiting with code 0 (a migration, `docker compose up --wait`).
  */
 export type Readiness = { readonly readyUrl: string } | { readonly waitForExit: true };
 
-/** The keys of a `CommandConfig`, kept equal to the type by the compiler. */
-const COMMAND_KEYS: readonly string[] = Object.keys({
+/** A command the runner spawns, its placeholders substituted, named for error messages. */
+export interface ResolvedCommand {
+  readonly label: string;
+  readonly command: CommandConfig<string>;
+}
+
+/** The keys of a `CommandConfig`: an app command and a service teardown take these only. */
+export const COMMAND_KEYS: readonly string[] = Object.keys({
   executable: true,
   args: true,
   cwd: true,
@@ -37,32 +45,48 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * A config value that must be a string. A `secrets.get()` handle is named as
- * one: the process would receive `[object Object]`, and only an engine option
- * that declares secrets resolves a handle to its value.
+ * A config string as the resolution reads it: a `svc.url` or `svc.port`
+ * placeholder as its token text, a string as itself, and anything else
+ * undefined, for the caller to name.
  */
-function commandString(value: unknown, label: string): string {
+function configString(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
+  if (typeof value !== 'function') return undefined;
+  const text = String(value);
+  const [token] = serviceTokens(text);
+  return token?.token === text ? text : undefined;
+}
+
+/**
+ * A config value that must be a string or a service placeholder, as its
+ * text. A `secrets.get()` handle is named as one: the process would receive
+ * `[object Object]`, and only an engine option that declares secrets
+ * resolves a handle to its value.
+ */
+export function placeholderString(value: unknown, label: string): string {
+  const text = configString(value);
+  if (text !== undefined) return text;
   if (isSecret(value)) {
     throw new ConfigurationError(
       'INVALID_CONFIG',
       `${label} must be a string, got secrets.get(${JSON.stringify(value.name)}): only an engine option that declares secrets accepts a handle, such as web({ basicAuth: { password } }); pass the value itself, read from process.env`,
     );
   }
-  throw new ConfigurationError('INVALID_CONFIG', `${label} must be a string, got ${describeValue(value)}`);
+  throw new ConfigurationError('INVALID_CONFIG', `${label} must be a string or a service placeholder, got ${describeValue(value)}`);
 }
 
 /**
- * Checks the shape of one command and returns a frozen copy: only the keys a
- * command takes, a non-empty executable, string args and env values, when
- * set positive integer timeouts, a non-empty `log`, and a boolean
+ * Checks the shape of one command and returns a frozen copy with every
+ * `args` entry and `env` value as a string: only the keys a command takes, a
+ * non-empty executable, string or placeholder args and env values, when set
+ * positive integer timeouts, a non-empty `log`, and a boolean
  * `reuseExisting`. A misspelled key would otherwise be dropped without a
  * word; a NaN or infinite budget would make the readiness loop spin without
  * a deadline. An `env` entry whose value is `undefined` is dropped, as
  * `spawn` drops it: `env: { KEY: process.env.KEY }` with the variable unset
  * starts the process without it.
  */
-export function normalizeCommand(command: CommandConfig, label: string): CommandConfig {
+export function normalizeCommand(command: CommandConfig, label: string): CommandConfig<string> {
   if (!isRecord(command)) throw new ConfigurationError('INVALID_CONFIG', `${label} must be an object`);
   rejectUnknownKeys(label, command, COMMAND_KEYS);
   const { executable, args, cwd, env, startupTimeout, shutdownTimeout, log, reuseExisting } = command;
@@ -70,9 +94,9 @@ export function normalizeCommand(command: CommandConfig, label: string): Command
     throw new ConfigurationError('INVALID_CONFIG', `${label}.executable is required`);
   }
   if (args !== undefined && !Array.isArray(args)) {
-    throw new ConfigurationError('INVALID_CONFIG', `${label}.args must be an array of strings`);
+    throw new ConfigurationError('INVALID_CONFIG', `${label}.args must be an array of strings or service placeholders`);
   }
-  const strings = args?.map((arg: unknown, index) => commandString(arg, `${label}.args[${index}]`));
+  const strings = args?.map((arg: unknown, index) => placeholderString(arg, `${label}.args[${index}]`));
   if (env !== undefined && !isRecord(env)) {
     throw new ConfigurationError('INVALID_CONFIG', `${label}.env must be an object of variable name to string`);
   }
@@ -81,7 +105,7 @@ export function normalizeCommand(command: CommandConfig, label: string): Command
       ? undefined
       : Object.entries(env)
           .filter(([, entry]) => entry !== undefined)
-          .map(([key, entry]) => [key, commandString(entry, `${label}.env.${key}`)] as const);
+          .map(([key, entry]) => [key, placeholderString(entry, `${label}.env.${key}`)] as const);
   if (cwd !== undefined && typeof cwd !== 'string') throw new ConfigurationError('INVALID_CONFIG', `${label}.cwd must be a string`);
   positiveInt(startupTimeout, `${label}.startupTimeout`, 'milliseconds');
   positiveInt(shutdownTimeout, `${label}.shutdownTimeout`, 'milliseconds');
@@ -106,7 +130,7 @@ export function normalizeCommand(command: CommandConfig, label: string): Command
 }
 
 /** A `log` must be a file inside the project root: a log outside it would let config write anywhere. */
-export function checkLog(command: CommandConfig, label: string, projectRoot: string): void {
+export function checkLog(command: CommandConfig<string>, label: string, projectRoot: string): void {
   if (command.log !== undefined && !insideProjectRoot(projectRoot, path.resolve(projectRoot, command.log))) {
     throw new ConfigurationError(
       'INVALID_CONFIG',
@@ -115,8 +139,8 @@ export function checkLog(command: CommandConfig, label: string, projectRoot: str
   }
 }
 
-/** A command as it enters the config digest: env values reduced to their names. */
-export function digestCommand(command: CommandConfig) {
+/** A command as it enters the config digest: placeholders as their tokens, env values reduced to their names. */
+export function digestCommand(command: CommandConfig<string>) {
   const { env, ...rest } = command;
   return obj({ ...rest, env: env === undefined ? undefined : Object.fromEntries(Object.keys(env).map((key) => [key, { envName: key }])) });
 }

@@ -1,6 +1,6 @@
 /**
  * The app under test is the target's: `web()` refuses the options that used
- * to describe it as unknown keys, and checks the target's `app` for what a browser needs.
+ * to describe it, and checks the target's `app` for what a browser needs.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,6 @@ describe('web() and the target app', () => {
     expect(() => web({ url: 'http://localhost:3000' } as never)).toThrowError(
       expect.objectContaining({ code: 'INVALID_CONFIG', message: expect.stringMatching(/^web\(\) has unknown key "url"/) }),
     );
-    expect(() => web({ services: [] } as never)).toThrowError(expect.objectContaining({ message: expect.stringMatching(/^web\(\) has unknown key "services"/) }));
   });
 
   it('needs app.url on the target, and refuses the fields of an installed device app', () => {

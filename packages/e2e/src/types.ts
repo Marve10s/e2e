@@ -3,7 +3,7 @@
  * `tests/types/sdk-types.ts` pins the parts that are easy to loosen by accident.
  */
 
-import type { expectationBrand, testCaseBrand } from './internal/brands.ts';
+import type { expectationBrand, serviceBrand, testCaseBrand } from './internal/brands.ts';
 import type { CredentialConfig, Secret, SecretConfig } from './config/secrets.ts';
 import type { Unique } from './params.ts';
 import type { StepExecutor } from './agent/executor.ts';
@@ -952,15 +952,15 @@ export interface Expect extends ExpectCall {
   stringMatching(sample: string | RegExp): AsymmetricMatcher;
 }
 
-export interface CommandConfig {
+export interface CommandConfig<Value extends ServiceString = ServiceString> {
   /** Resolved with `PATH`; never shell-interpreted. */
   executable: string;
-  /** Passed verbatim; `{port}` expands to the app's port. */
-  args?: readonly string[];
+  /** Passed verbatim; `{port}` expands to the process's own port, a service placeholder to that service's address. */
+  args?: readonly Value[];
   /** Working directory, resolved from the project root. */
   cwd?: string;
-  /** Added to the inherited set; `{port}` expands in values. */
-  env?: Readonly<Record<string, string>>;
+  /** Added to the runner's environment, which the process inherits whole; `{port}` and placeholders expand in values. */
+  env?: Readonly<Record<string, Value>>;
   /** Ready-probe budget in milliseconds; default 60000. Expiry is `APP_UNREACHABLE`. */
   startupTimeout?: number;
   /** Grace period before force-kill in milliseconds; default 10000. */
@@ -970,11 +970,145 @@ export interface CommandConfig {
   /**
    * When the readiness URL already answers before the command starts, use that
    * process instead of spawning: nothing is started and nothing is stopped.
-   * Off by default; CI ignores it and always starts the command. A URL on a
-   * free port (port 0) can never already answer, so the two together are
-   * `INVALID_CONFIG`.
+   * Off by default; CI ignores it and always starts the command. A readiness
+   * URL on a free port (port 0) can never already answer, so the two together
+   * are `INVALID_CONFIG`.
    */
   reuseExisting?: boolean;
+}
+
+/**
+ * A placeholder for where a service is served, read off its handle:
+ * `svc.url` and `svc.port` for its primary address (the one its `readyUrl`
+ * names), `svc.url('smtp')` and `svc.port('smtp')` for a named port. It is a
+ * deterministic token, not the address: the runner substitutes it wherever a
+ * process is declared (the args, env, and `readyUrl` of a service or an app
+ * command) and in a target's `app.url`, once the run has assigned the ports.
+ * It reads as the token in a template literal, so `${svc.url}/api` is a
+ * placeholder too. Tests never see the address through it: opening one fails
+ * naming the service.
+ */
+export interface ServiceAddress {
+  /** The placeholder for one named port of the service's `ports`: `smtp://127.0.0.1:1025` for `url('smtp')`, the number for `port('smtp')`. */
+  (port: string): string;
+  [Symbol.toPrimitive](hint: string): string;
+}
+
+/** A config string that may be, or contain, a service address placeholder. */
+export type ServiceString = string | ServiceAddress;
+
+/** What every service declares, whichever form it takes. */
+interface ServiceBase {
+  /**
+   * The service's name in errors, reporter output, and placeholders: ASCII
+   * letters, digits, `_`, and `-`, at most 64 characters. One name is one
+   * service across the run; two handles with the same name are
+   * `INVALID_CONFIG`.
+   */
+  name: string;
+  /**
+   * Services that must be ready before this one starts, and stop after it.
+   * A target that lists this service gets them too, whether it lists them or
+   * not. Each is a handle defined before this one, and the list is copied
+   * when the service is defined, so services never depend on each other in a
+   * cycle.
+   */
+  dependsOn?: readonly ServiceHandle[];
+}
+
+/**
+ * A service the runner spawns (a database container, an API mock, a dev
+ * server): a command with exactly one readiness contract, `readyUrl` or
+ * `waitForExit: true`.
+ */
+export interface ProcessServiceOptions extends ServiceBase, CommandConfig {
+  /**
+   * HTTP readiness probe, a status of 200 through 499 counts as ready. It is
+   * also the service's primary address (`svc.url`, `svc.port`). Port 0 on a
+   * loopback address (`http://127.0.0.1:0`) asks the run for a free port,
+   * which `{port}` names in the service's args, env, and teardown; on a
+   * fixed port `{port}` is `INVALID_CONFIG` (write the port). It may name a
+   * port of `ports` as `{port:name}`, but not another service's address: it
+   * is this service's own.
+   */
+  readyUrl?: string;
+  /**
+   * Wait for the process to exit with code 0 instead of probing a URL
+   * (migrations, `docker compose up --wait`). A non-zero exit or the
+   * `startupTimeout` expiring is `APP_UNREACHABLE`.
+   */
+  waitForExit?: boolean;
+  /**
+   * Named ports, each 0 for a free port the run assigns or a fixed number:
+   * `{ smtp: 0, http: 0 }`, read as `{port:smtp}` in the service's own args,
+   * env, `readyUrl`, and teardown, and as `svc.url('smtp')` or
+   * `svc.port('smtp')` elsewhere. A name is a lowercase URL scheme
+   * (`http`, `smtp`, `postgres`): `svc.url('smtp')` reads `smtp://host:port`.
+   */
+  ports?: Readonly<Record<string, number>>;
+  /**
+   * Command run during teardown after the service itself has stopped
+   * (`docker compose down`). Runs on every exit path, is waited on until it
+   * exits within its own `startupTimeout`, and a failure is recorded as a
+   * cleanup-phase run error rather than a crash.
+   */
+  teardown?: CommandConfig;
+  start?: never;
+  stop?: never;
+}
+
+/** What a function service's `start` and `stop` receive. */
+export interface ServiceContext {
+  /** `start`: aborts on interrupt. `stop`: aborts when the cleanup budget is spent. */
+  readonly signal: AbortSignal;
+  /** Directory relative paths in the config resolve against. */
+  readonly projectRoot: string;
+  /** Where every service this one depends on, directly or through another, is served, by name. */
+  readonly services: Readonly<Record<string, ServiceAddresses>>;
+}
+
+/** Where one service is served, as the run resolved it. */
+export interface ServiceAddresses {
+  /** The primary address, the origin of `readyUrl`; undefined without one. */
+  readonly url: string | undefined;
+  /** The primary port; undefined without a `readyUrl`. */
+  readonly port: number | undefined;
+  /** Every named port, assigned. */
+  readonly ports: Readonly<Record<string, number>>;
+}
+
+/**
+ * A service that is code rather than a process: global setup and teardown
+ * (seeding a database, starting an in-process mock). `start` resolves once
+ * the service is ready; `stop` runs at the end of the run, in reverse
+ * dependency order. It has no address.
+ */
+export interface FunctionServiceOptions extends ServiceBase {
+  start(context: ServiceContext): Promise<void>;
+  stop?(context: ServiceContext): Promise<void>;
+  /**
+   * Budget for `start` in milliseconds; default 60000. Expiry is
+   * `APP_UNREACHABLE` naming the service, and aborts the context's signal.
+   */
+  startupTimeout?: number;
+  executable?: never;
+}
+
+/** A process service or a function service; the two forms are mutually exclusive. */
+export type ServiceOptions = ProcessServiceOptions | FunctionServiceOptions;
+
+/**
+ * What `defineService` returns: the one identity of a service, listed in a
+ * target's `services` and in another service's `dependsOn`, and the source of
+ * its address placeholders. Frozen; a spread copy is not a service.
+ */
+export interface ServiceHandle {
+  readonly name: string;
+  /** Placeholder for the primary address, or `url('name')` for a named port's. */
+  readonly url: ServiceAddress;
+  /** Placeholder for the primary port, or `port('name')` for a named one. */
+  readonly port: ServiceAddress;
+  readonly [serviceBrand]: true;
 }
 
 /** A permission's state when the app launches: held, refused, or not asked for yet, so the OS asks again. */
@@ -997,9 +1131,11 @@ export interface TargetApp {
    * loopback host. Plain HTTP is accepted for loopback hosts only. A URL on
    * `127.0.0.1` or `[::1]` with port 0 asks the run for a free port for
    * `command`, handed to it as `{port}`; without a command nothing would
-   * serve it, so that is `INVALID_CONFIG`.
+   * serve it, so that is `INVALID_CONFIG`. A service placeholder
+   * (`app: { url: webServer.url }`) serves the target from that service, so
+   * several targets can share one dev server on a free port.
    */
-  url?: string | undefined;
+  url?: ServiceString | undefined;
   /**
    * The installed app a device target launches: a bundle id, an Android
    * package name, or a display name the device resolves (`Settings`).
@@ -1041,12 +1177,14 @@ export interface TargetApp {
   permissions?: Readonly<Record<string, AppPermissionState>> | undefined;
   /**
    * Process the runner starts before the first test and stops at the end of
-   * the run (a dev server, Metro for a debug build). Structured, never
-   * shell-interpreted; the child inherits only `PATH`, `HOME`, the
-   * temp-directory variables, and `command.env`. `{port}` in it is the port
-   * of `url`, fixed or free. Targets declaring the same command share one
-   * process, probed at the first declaring target's `readyUrl`. A release
-   * build has no command.
+   * the run (a dev server, Metro for a debug build), after the target's
+   * services are ready: shorthand for a service only this target uses.
+   * Structured, never shell-interpreted. `{port}` in it is the port of
+   * `url`, fixed or free, or the free port of a `readyUrl` on port 0 without
+   * a `url`. It serves `url`, so a `url` that is a
+   * service placeholder cannot have one. Two processes probing one fixed
+   * address are `INVALID_CONFIG`: a process several targets share is a
+   * `defineService`. A release build has no command.
    */
   command?: CommandConfig | undefined;
   /**
@@ -1074,6 +1212,14 @@ export interface Target {
   engine?: EngineHandle;
   /** The app under test: what it is, where it is served, and the command that starts it. */
   app?: TargetApp;
+  /**
+   * The services this target needs, `defineService` handles: started once
+   * for the run before the first test, with every service they depend on,
+   * dependencies first, and stopped at the end in reverse. A service several
+   * targets list is one process. A service no selected target needs does not
+   * start.
+   */
+  services?: readonly ServiceHandle[];
   /**
    * Which attempts on this target record a trace, in place of the config's
    * `trace`; `--trace` and a test's own `trace` win over it. A mode set here
