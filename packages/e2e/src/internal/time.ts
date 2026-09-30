@@ -3,10 +3,17 @@
 import { E2EError } from './errors.ts';
 
 export class Deadline {
+  readonly startedAt: number;
   readonly endsAt: number;
 
   constructor(timeoutMs: number, now: number = Date.now()) {
+    this.startedAt = now;
     this.endsAt = now + timeoutMs;
+  }
+
+  /** How long has passed since the deadline was set: the wait it timed, on its own clock. */
+  elapsed(now: number = Date.now()): number {
+    return Math.max(0, now - this.startedAt);
   }
 
   /** Remaining budget in ms, never negative. */

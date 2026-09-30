@@ -58,12 +58,21 @@ describe('the bundled agent skill', () => {
 function userFacingPages(): { file: string; text: string }[] {
   const root = new URL('../../../../', import.meta.url);
   return ['skills/e2e', 'docs']
-    .flatMap((dir) =>
-      readdirSync(new URL(dir, root), { recursive: true, encoding: 'utf8' })
-        .filter((file) => /\.mdx?$/.test(file) && !file.includes('node_modules'))
-        .map((file) => `${dir}/${file}`),
-    )
+    .flatMap((dir) => markdownFiles(root, dir))
     .map((file) => ({ file, text: readFileSync(new URL(file, root), 'utf8') }));
+}
+
+/**
+ * Every `.md` and `.mdx` file under `dir`, relative to `root`. Walks real
+ * directories only: a `node_modules` (pnpm links the workspace into
+ * `docs/node_modules`, a symlink loop) and any other symlink are left alone.
+ */
+function markdownFiles(root: URL, dir: string): string[] {
+  return readdirSync(new URL(`${dir}/`, root), { withFileTypes: true }).flatMap((entry) => {
+    const file = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : markdownFiles(root, file);
+    return entry.isFile() && /\.mdx?$/.test(entry.name) ? [file] : [];
+  });
 }
 
 describe('the skill and the docs', () => {
