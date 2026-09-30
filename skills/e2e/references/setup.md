@@ -35,7 +35,11 @@ installing dependencies.
 
 Init adds dependencies and a `test:e2e` script to `package.json`, writes
 `e2e.config.ts` and `tests/example.e2e.ts`, updates `.gitignore`, leaves
-existing configs and tests alone. Re-run after upgrading to refresh skill and
+existing configs and tests alone. On pnpm it adds `esbuild: false` under
+`allowBuilds` in `pnpm-workspace.yaml`: pnpm 11+ fails install on an
+undecided build script (`ERR_PNPM_IGNORED_BUILDS`), and tsx's esbuild needs
+none. In a pnpm monorepo package it warns instead; add that line to the root
+`pnpm-workspace.yaml`. Re-run after upgrading to refresh skill and
 MCP entries.
 
 Without the wizard (`ai`, Vercel AI SDK v7, only for `agent.*` steps):
@@ -43,6 +47,9 @@ Without the wizard (`ai`, Vercel AI SDK v7, only for `agent.*` steps):
 ```bash
 npm install --save-dev e2e @e2e-dev/web playwright ai@^7
 ```
+
+On pnpm 11+, first add `esbuild: false` under `allowBuilds` in
+`pnpm-workspace.yaml`, as init does.
 
 ## Subscriptions and API keys
 

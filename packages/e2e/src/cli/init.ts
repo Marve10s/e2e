@@ -24,6 +24,7 @@ import { getEnginePresets, DEFAULT_ENGINE_ID, type EngineId } from './init/engin
 import { GATEWAYS, getGatewayPreset, type GatewayId } from './init/gateways.ts';
 import { findRegisteredMcpFiles, MCP_LOCATIONS, planMcpRegistration } from './init/mcp-config.ts';
 import { addDependencies, addScripts, describeManifestError, readPackage, serializePackage } from './init/package.ts';
+import { planPnpmBuilds } from './init/pnpm-builds.ts';
 import { createScaffold, type ScaffoldModel } from './init/scaffold.ts';
 import { MISSING_SKILL_MESSAGE, readSkillFiles } from './skill.ts';
 import { playWordmark } from './wordmark.ts';
@@ -224,12 +225,21 @@ export async function init(cwd: string, options: InitOptions = {}): Promise<Init
     clack.log.info(`Add scripts: ${scripts.map(([name, command]) => `${name} (${command})`).join(', ')}`);
   }
 
+  const manager = detectPackageManager(cwd, manifest.packageManager);
+  const pnpmBuilds = manager === 'pnpm' ? planPnpmBuilds(cwd) : undefined;
+  if (pnpmBuilds?.kind === 'write') {
+    clack.log.info(`Skip esbuild's build script in ${pnpmBuilds.relative} (allowBuilds); pnpm fails an install that has not decided it`);
+  } else if (pnpmBuilds?.kind === 'manual') {
+    clack.log.warn(`Add "esbuild: false" under allowBuilds in ${pnpmBuilds.relative}; pnpm install fails with ERR_PNPM_IGNORED_BUILDS until esbuild's build script is decided`);
+  }
+
   const files = [
     ...(pkg.original === undefined || dependencies.additions.length > 0 || scripts.length > 0
       ? [{ relative: 'package.json', content: serializePackage(manifest, pkg.original), existing: pkg.original !== undefined }]
       : []),
     ...(existingConfig === undefined ? [{ relative: 'e2e.config.ts', content: scaffold.config, existing: false }] : []),
     ...(exampleExists ? [] : [{ relative: examplePath, content: scaffold.example, existing: false }]),
+    ...(pnpmBuilds?.kind === 'write' ? [{ relative: pnpmBuilds.relative, content: pnpmBuilds.content, existing: pnpmBuilds.existing }] : []),
   ];
 
   if (files.length === 0 && skillInstalls.length === 0 && mcpRegistrations.length === 0 && missingIgnore.length === 0) {
@@ -252,7 +262,6 @@ export async function init(cwd: string, options: InitOptions = {}): Promise<Init
     if (isCancelled(proceed) || !proceed) return cancel();
   }
 
-  const manager = detectPackageManager(cwd, manifest.packageManager);
   let install = false;
   if (!options.yes) {
     const selected = await clack.confirm({ message: `Install dependencies with ${manager}?`, initialValue: true });

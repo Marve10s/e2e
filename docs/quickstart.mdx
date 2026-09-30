@@ -36,6 +36,8 @@ need Xcode with an iOS simulator runtime, or the Android SDK with an emulator.
   subscription or model provider. Choose **None** if you only want tests
   without AI. The wizard writes a config and example test, adds dependencies,
   and offers to set up your coding agent. Existing config and test files stay intact.
+  With pnpm it also marks esbuild's build script as not needed in `pnpm-workspace.yaml`,
+  which pnpm 11 and later require before they install.
   If you skipped installing dependencies, run `npm install`, `pnpm install`, or `bun install`.
 
   <Tabs>

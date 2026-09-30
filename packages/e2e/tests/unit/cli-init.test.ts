@@ -499,6 +499,53 @@ describe('e2e init', () => {
     expect(spawnSync).toHaveBeenCalledWith('pnpm', ['install'], expect.objectContaining({ cwd: dir }));
   });
 
+  it('lets pnpm skip the esbuild build script tsx needs none of, and leaves other managers alone', async () => {
+    await init(dir, { yes: true });
+    expect(existsSync(path.join(dir, 'pnpm-workspace.yaml'))).toBe(false);
+
+    rmSync(dir, { recursive: true, force: true });
+    vi.stubEnv('npm_config_user_agent', 'pnpm/12.3.4 npm/? node/v24.19.0 darwin arm64');
+    await init(dir, { yes: true });
+    expect(read('pnpm-workspace.yaml')).toMatch(/^# .*tsx.*\n.*\nallowBuilds:\n {2}esbuild: false\n$/);
+    expect(output()).toContain('Created pnpm-workspace.yaml');
+    expect((await init(dir, { yes: true })).result).toBe('already-initialized');
+  });
+
+  it.each([
+    ['without allowBuilds', 'packages:\n  - apps/*\n', 'packages:\n  - apps/*\n\n# '],
+    ['with a block allowBuilds', 'allowBuilds:\n    sharp: false\nminimumReleaseAge: 0\n', 'allowBuilds:\n    esbuild: false\n    sharp: false\nminimumReleaseAge: 0\n'],
+  ])('adds esbuild to a pnpm-workspace.yaml %s and keeps the rest', async (_, before, after) => {
+    writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+    writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), before);
+    await init(dir, { yes: true });
+    expect(read('pnpm-workspace.yaml').startsWith(after)).toBe(true);
+    expect(read('pnpm-workspace.yaml').match(/esbuild: false/g)).toHaveLength(1);
+    expect(output()).toContain('Updated pnpm-workspace.yaml');
+  });
+
+  it.each([
+    ['allowBuilds:\n  esbuild: true\n', false],
+    ["allowBuilds:\n  'esbuild': false\n", false],
+    ['dangerouslyAllowAllBuilds: true\n', false],
+    ['allowBuilds: { sharp: false }\n', true],
+  ])('keeps a pnpm-workspace.yaml that reads %j (warns: %s)', async (before, warns) => {
+    writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+    writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), before);
+    await init(dir, { yes: true });
+    expect(read('pnpm-workspace.yaml')).toBe(before);
+    expect(output().includes('Add "esbuild: false" under allowBuilds in pnpm-workspace.yaml')).toBe(warns);
+  });
+
+  it('never edits the workspace root above a pnpm project, and names what to add there', async () => {
+    vi.stubEnv('npm_config_user_agent', 'pnpm/12.3.4 npm/? node/v24.19.0 darwin arm64');
+    writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+    const app = path.join(dir, 'apps', 'web');
+    await init(app, { yes: true, directory: 'apps/web' });
+    expect(read('pnpm-workspace.yaml')).toBe('packages:\n  - apps/*\n');
+    expect(existsSync(path.join(app, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(output()).toContain('Add "esbuild: false" under allowBuilds in ../../pnpm-workspace.yaml');
+  });
+
   it('keeps the scaffold and returns a failure when installation fails', async () => {
     vi.mocked(spawnSync).mockReturnValueOnce(spawnResult(1));
     vi.mocked(clack.confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
