@@ -519,7 +519,8 @@ Signals escalate.
    startup) writes no report and leaves the previous one in place.
 2. A second signal forces. Workers dispose their engines at once and are
    killed when the cleanup budget is spent. The report is still written,
-   and so are `junit.xml` and `summary.md`; a custom reporter's
+   and so are `junit.xml` and `summary.md` when the `junit` and
+   `markdown` reporters are on; a custom reporter's
    `onRunFinished` is abandoned.
 3. A third signal exits on the spot, after killing the process groups of every
    app command the run started. A process attached through

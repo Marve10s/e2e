@@ -30,13 +30,15 @@ function testKey(result: ReportResult): string {
 /**
  * The rerun's result with the run before's attempts in front of its own:
  * the same test's result there, and the further repeats the rerun has no
- * result of its own for. A pass after a failure there is flaky.
+ * result of its own for. A pass after a failure there is flaky; an
+ * interrupted rerun of a test that failed there keeps that failure.
  */
 function foldRerun(current: ReportResult, history: readonly ReportResult[]): ReportResult {
   if (history.length === 0) return current;
   const before = history.toSorted((a, b) => a.repeat - b.repeat);
   const attempts = [...before.flatMap((result) => result.attempts), ...current.attempts];
-  const status = current.status === 'passed' && before.some((result) => FAILED_STATUSES.has(result.status)) ? 'flaky' : current.status;
+  const failure = before.findLast((result) => FAILED_STATUSES.has(result.status));
+  const status = failure === undefined ? current.status : current.status === 'passed' ? 'flaky' : current.status === 'interrupted' ? failure.status : current.status;
   return { ...current, status, attempts };
 }
 

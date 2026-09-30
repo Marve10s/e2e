@@ -146,7 +146,7 @@ deterministic, never retry it; only exit 3 is worth a job-level retry.
 
 The first SIGINT or SIGTERM interrupts and writes the report if any test
 had started; the second forces engine teardown and still writes the
-report, `junit.xml`, and `summary.md`; the third kills the app
+report, plus `junit.xml` and `summary.md` when those reporters are on; the third kills the app
 and service process groups and exits 130 at once.
 
 ## Continuous integration

@@ -23,7 +23,7 @@ import { collapseText } from '../internal/text.ts';
 import type { Report1Document, ReportError, ReportExplore, ReportExploreFinding, ReportResult, ReportStep, ReportTarget } from './build.ts';
 import { ENDED_TEXT, orderFindings, SEVERITY_WORDS, stepCountParts } from './explore-text.ts';
 import { formatCost, formatTokens, repeatSuffix, statusBucket, tally, type Counters } from './format.ts';
-import { repeatGroups, repeatLine, repeatSummary } from './repeats.ts';
+import { repeatGroups, repeatLine, repeatSummary, type RepeatGroup } from './repeats.ts';
 import {
   attemptsLine,
   detailLines,
@@ -315,6 +315,12 @@ function flakyFold(entries: readonly Entry[], manyTargets: boolean, options: Mar
   return [['<details>', `<summary>${summary}</summary>`, '', shown.join('\n\n'), '</details>'].join('\n')];
 }
 
+/** A test that missed a run: flaky when a run failed, else interrupted when the run stopped one, else skipped. */
+function missIcon(group: RepeatGroup): string {
+  if (group.unstable) return ICON.flaky;
+  return group.runs.some((run) => run.status === 'interrupted') ? ICON.interrupted : ICON.skipped;
+}
+
 /**
  * A `--repeat-each` run's tally: how many tests passed every run, then each
  * test that did not, with the runs that failed. Empty for a run that
@@ -336,7 +342,7 @@ function repeatsSection(entries: readonly Entry[], manyTargets: boolean): string
   const missed = groups.filter((group) => group.passed < group.runs.length).toSorted((a, b) => Number(b.unstable) - Number(a.unstable));
   return [
     `**Repeats:** ${repeatSummary(groups)}`,
-    ...(missed.length === 0 ? [] : ['', ...missed.map((group) => `- ${group.unstable ? ICON.flaky : ICON.interrupted} ${group.label}: ${cell(repeatLine(group))}`)]),
+    ...(missed.length === 0 ? [] : ['', ...missed.map((group) => `- ${missIcon(group)} ${group.label}: ${cell(repeatLine(group))}`)]),
   ];
 }
 

@@ -192,6 +192,16 @@ describe('foldLastRun', () => {
     expect(renderMarkdownReport(folded)).toContain('### ⏹️ e2e: 1 interrupted, 1 passed');
   });
 
+  it('keeps the first pass\'s failure when the rerun of that test is interrupted', () => {
+    const interruptedAttempt = attempt({ status: 'interrupted', error: { category: 'interrupted', code: 'INTERRUPTED', message: 'run interrupted in phase test' } });
+    const before = report({ status: 'failed', results: [result({ title: 'A', status: 'failed', attempts: [failedAttempt] })] });
+    const cut = report({ status: 'interrupted', results: [result({ title: 'A', status: 'interrupted', attempts: [interruptedAttempt] })] });
+    const folded = foldLastRun(cut, before);
+    expect(byTitle(folded).get('A#0')).toMatchObject({ status: 'failed' });
+    expect(folded.run.summary).toMatchObject({ failed: 1, interrupted: 0 });
+    expect(renderMarkdownReport(folded)).toContain('### 🔴 e2e: 1 failed');
+  });
+
   it('leaves the rerun alone when the run before is another project\'s', () => {
     const other = report({ projectId: 'dev.example.other', status: 'failed', results: firstPass.run.results });
     expect(foldLastRun(rerun, other)).toBe(rerun);
