@@ -85,9 +85,14 @@ function screenUrl(url: string): string {
   }
 }
 
-/** The attempt whose story a block tells: a flaky test's last failure, otherwise the final one. */
+/**
+ * The attempt whose story a block tells: a flaky test's last failure, a
+ * failed test's last failure when the run interrupted the retry after it,
+ * otherwise the final one.
+ */
 export function toldAttempt(result: ReportResult, final: Outcome): AttemptView {
-  return result.status === 'flaky' ? (final.lastFailed ?? final.final) : final.final;
+  const cutRetry = result.status !== 'interrupted' && final.final.status === 'interrupted';
+  return result.status === 'flaky' || cutRetry ? (final.lastFailed ?? final.final) : final.final;
 }
 
 /** A step that did not pass. */
@@ -108,9 +113,9 @@ export function failedStepOf(steps: readonly ReportStep[]): { index: number; ste
  */
 export function attemptsLine(result: ReportResult, final: Outcome): string | undefined {
   // An attempt that recorded nothing for this test (a serial group that never
-  // reached the member) says nothing about how the test fails.
+  // reached the member), or one the run interrupted, says nothing about how the test fails.
   const failed = final.attempts
-    .filter((attempt) => attempt.status !== 'passed' && attempt.status !== 'skipped' && (attempt.error !== undefined || attempt.steps.length > 0))
+    .filter((attempt) => attempt.status !== 'passed' && attempt.status !== 'skipped' && attempt.status !== 'interrupted' && (attempt.error !== undefined || attempt.steps.length > 0))
     .map((attempt) => ({
       code: cell(attempt.error?.code ?? attempt.status, 128),
       step: failedStepOf(attempt.steps)?.index,

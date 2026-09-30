@@ -3,6 +3,7 @@
 import { sanitizeText } from '../internal/errors.ts';
 import type { Report1Document, ReportError, ReportResult, ReportSerialGroup } from './build.ts';
 import { repeatSuffix } from './format.ts';
+import { toldAttempt } from './failure-text.ts';
 import { outcome } from './outcome.ts';
 import { fileReporter } from './write.ts';
 
@@ -126,8 +127,8 @@ function renderResult(result: ReportResult, groups: ReadonlyMap<string, ReportSe
       };
     }
     default: {
-      const element = verdictElement(final.final.error);
-      const error = final.final.error;
+      const error = toldAttempt(result, final).error;
+      const element = verdictElement(error);
       const message = error?.message ?? result.status;
       const type = error?.code ?? result.status;
       const body = error === undefined ? result.status : errorBody(error);

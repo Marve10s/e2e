@@ -731,6 +731,21 @@ describe('an interrupted run', () => {
     expect(body).toContain('| ⏹️ | cut short |');
   });
 
+  it('tells the failure an interrupted retry was cut short after', () => {
+    const retried = named({
+      title: 'fails then gets cut',
+      status: 'failed',
+      attempts: [
+        attempt({ status: 'failed', error: { code: 'ASSERTION_FAILED', message: 'no cart' } }),
+        attempt({ status: 'interrupted', error: { code: 'INTERRUPTED', message: 'run interrupted in phase body' } }),
+      ],
+    });
+    const body = renderMarkdownReport(page({ status: 'interrupted', results: [retried] }));
+    expect(body.startsWith('### 🔴 e2e: 1 failed\n')).toBe(true);
+    expect(body).toContain('**ASSERTION_FAILED**');
+    expect(body).not.toContain('**INTERRUPTED**');
+  });
+
   it('stays red when the run failed before it was stopped', () => {
     const body = renderMarkdownReport(page({ status: 'interrupted', results: [failing, cut] }));
     expect(body.startsWith('### 🔴 e2e: 1 failed, 1 interrupted\n')).toBe(true);

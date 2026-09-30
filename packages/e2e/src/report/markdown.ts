@@ -125,11 +125,18 @@ function pageName(options: MarkdownReportOptions): string {
   return title === '' ? 'e2e' : `e2e ${cell(title, MAX_ID_CHARS)}`;
 }
 
-/** The headline's glyph: green for a pass, the interrupted glyph for a run stopped with no failure of its own, else red. */
+/**
+ * The headline's glyph: red for a failed run or any failed test, the
+ * interrupted glyph for a run or a listed test the run stopped, else green.
+ * A `--last-failed` rerun that passed can still list a test the first pass
+ * never finished, and the page must not read as all green.
+ */
 function runIcon(run: ReportRun, results: readonly ReportResult[]): string {
-  if (run.status === 'passed') return ICON.passed;
-  if (run.status === 'interrupted' && worstBucket(results) !== 'failed') return ICON.interrupted;
-  return ICON.failed;
+  if (run.status !== 'passed' && run.status !== 'interrupted') return ICON.failed;
+  const worst = worstBucket(results);
+  if (worst === 'failed') return ICON.failed;
+  if (worst === 'interrupted' || run.status === 'interrupted') return ICON.interrupted;
+  return ICON.passed;
 }
 
 function headline(run: ReportRun, results: readonly ReportResult[], options: MarkdownReportOptions): string {
@@ -325,10 +332,11 @@ function repeatsSection(entries: readonly Entry[], manyTargets: boolean): string
     run: { repeat: result.repeat, status: result.status, code: final.final.error?.code ?? final.lastFailed?.error?.code },
   }));
   if (groups.length === 0) return [];
-  const unstable = groups.filter((group) => group.passed < group.runs.length);
+  // A test is listed when it missed a run: a flake first, then one the run cut short.
+  const missed = groups.filter((group) => group.passed < group.runs.length).toSorted((a, b) => Number(b.unstable) - Number(a.unstable));
   return [
     `**Repeats:** ${repeatSummary(groups)}`,
-    ...(unstable.length === 0 ? [] : ['', ...unstable.map((group) => `- ${ICON.flaky} ${group.label}: ${cell(repeatLine(group))}`)]),
+    ...(missed.length === 0 ? [] : ['', ...missed.map((group) => `- ${group.unstable ? ICON.flaky : ICON.interrupted} ${group.label}: ${cell(repeatLine(group))}`)]),
   ];
 }
 
