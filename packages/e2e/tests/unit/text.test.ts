@@ -6,6 +6,7 @@ import {
   normalizeRegexpFlags,
   normalizeText,
   toTextPattern,
+  withIgnoreCase,
 } from '../../src/internal/text.ts';
 
 describe('normalizeText', () => {
@@ -57,6 +58,36 @@ describe('compareText', () => {
     expect(compareText(value, { kind: 'string', value, exact: true }, raw)).toBe(true);
     expect(compareText(value, { kind: 'regexp', source: '^line1\\n\\nline2 {2}$', flags: '' }, raw)).toBe(true);
     expect(compareText(value, { kind: 'string', value: 'line1 line2', exact: true }, { ...raw, normalize: true })).toBe(true);
+  });
+
+  it('ignoreCase folds both sides of a string comparison, in both modes', () => {
+    const equals = { mode: 'equals', normalize: true } as const;
+    const dashboard = { kind: 'string', value: 'DASHBOARD', exact: true } as const;
+    expect(compareText('Dashboard', dashboard, equals)).toBe(false);
+    expect(compareText('Dashboard', dashboard, { ...equals, ignoreCase: true })).toBe(true);
+    expect(compareText('Dashboard', dashboard, { ...equals, ignoreCase: false })).toBe(false);
+    expect(compareText('Card Body', { kind: 'string', value: 'BODY', exact: true }, { ...contains, ignoreCase: true })).toBe(true);
+    expect(compareText('Dashboard!', dashboard, { ...equals, ignoreCase: true })).toBe(false);
+  });
+
+  it('ignoreCase adds or removes the i flag of a regexp, as Playwright does', () => {
+    const equals = { mode: 'equals', normalize: true } as const;
+    const plain = { kind: 'regexp', source: '^dash', flags: '' } as const;
+    const folded = { kind: 'regexp', source: '^dash', flags: 'i' } as const;
+    expect(compareText('Dashboard', plain, equals)).toBe(false);
+    expect(compareText('Dashboard', plain, { ...equals, ignoreCase: true })).toBe(true);
+    expect(compareText('Dashboard', folded, equals)).toBe(true);
+    expect(compareText('Dashboard', folded, { ...equals, ignoreCase: false })).toBe(false);
+  });
+});
+
+describe('withIgnoreCase', () => {
+  it('rewrites only a regexp, keeping its other flags in canonical order', () => {
+    const string = { kind: 'string', value: 'A', exact: true } as const;
+    expect(withIgnoreCase(string, true)).toBe(string);
+    expect(withIgnoreCase({ kind: 'regexp', source: 'a', flags: 'mu' }, true)).toEqual({ kind: 'regexp', source: 'a', flags: 'imu' });
+    expect(withIgnoreCase({ kind: 'regexp', source: 'a', flags: 'imu' }, false)).toEqual({ kind: 'regexp', source: 'a', flags: 'mu' });
+    expect(withIgnoreCase({ kind: 'regexp', source: 'a', flags: 'i' }, undefined)).toEqual({ kind: 'regexp', source: 'a', flags: 'i' });
   });
 });
 

@@ -215,7 +215,7 @@ text, both `[]` at zero. Text is the rendered text, whitespace collapsed: on
 the web what `innerText` reads (`text-transform` applies, `display: none`
 drops out, `<br>` is a space); `toHaveText` reads the same. `isChecked()` is
 `false`, not an error, on a node with no checked state, so query checkable
-controls by role. `waitFor({ state?: 'visible' | 'hidden', timeout? })` waits
+controls by role. `waitFor({ state?: 'attached' | 'detached' | 'visible' | 'hidden', timeout? })` waits
 within `actionTimeout`, else `LOCATOR_NOT_FOUND`. For a value that has to
 settle use `expect`, not a read. Reading a password field's value or
 attributes is `POLICY_DENIED`, as is `toHaveAttribute` on one, negated too.
@@ -261,7 +261,12 @@ in order; `toContainText(['Alpha', 'Beta'])` needs each entry in a distinct
 match, in order, extra matches allowed. `toHaveAttribute(name)` checks
 presence, `toHaveAttribute(name, value)` the value; `toBeAttached` waits for
 a match, hidden or not; `toHaveClass` compares the whole normalized class
-list or tests a RegExp. A failed matcher is `ASSERTION_FAILED`, exit code 1.
+list or tests a RegExp. `toBeVisible({ visible: false })`, `toBeAttached({
+attached: false })`, `toBeEnabled({ enabled: false })`, and `toBeChecked({
+checked: false })` wait for the opposite state; `ignoreCase` works on
+`toHaveText`, `toContainText`, `toHaveAccessibleName`, and
+`toHaveAttribute(name, value)`. Any other option key is `INVALID_ARGUMENT`.
+A failed matcher is `ASSERTION_FAILED`, exit code 1.
 
 ## Sign-in sessions
 

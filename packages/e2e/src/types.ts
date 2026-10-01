@@ -515,8 +515,12 @@ export interface Locator extends Screen {
   all(): Promise<Locator[]>;
   /** Reads the normalized text of every current match, without auto-waiting; empty when nothing matches. */
   allTextContents(): Promise<string[]>;
-  /** Waits for the requested locator state. */
-  waitFor(options?: { state?: 'visible' | 'hidden'; timeout?: number }): Promise<void>;
+  /**
+   * Waits for the requested locator state, `visible` by default: `attached`
+   * for one match, visible or not; `detached` for none; `hidden` for none or
+   * a hidden one.
+   */
+  waitFor(options?: { state?: 'attached' | 'detached' | 'visible' | 'hidden'; timeout?: number }): Promise<void>;
   /** Adds deterministic locator filters. */
   filter(options: { hasText?: TextMatch; has?: Locator }): Locator;
   /** Selects the first current match. */
@@ -740,21 +744,28 @@ export interface TestAPI<Fixtures = TestFixtures> {
   afterAll(fn: SuiteHookFn): void;
 }
 
+/** Options of the locator matchers that compare text. */
+export interface TextMatcherOptions {
+  /** Compares case-insensitively: a string folds both sides, a RegExp gains the `i` flag; `false` drops the `i` flag from a RegExp. */
+  ignoreCase?: boolean;
+  timeout?: number;
+}
+
 export interface AsyncExpectation {
   /** Inverts the matcher. A negated matcher passes after 1000 ms of continuous truth. */
   readonly not: AsyncExpectation;
-  /** Waits for visibility. */
-  toBeVisible(options?: { timeout?: number }): Promise<void>;
+  /** Waits for visibility; `visible: false` waits for hidden or absent, as `toBeHidden` does. */
+  toBeVisible(options?: { visible?: boolean; timeout?: number }): Promise<void>;
   /** Waits for hidden or absent state. */
   toBeHidden(options?: { timeout?: number }): Promise<void>;
-  /** Waits for one match to exist, visible or not. */
-  toBeAttached(options?: { timeout?: number }): Promise<void>;
-  /** Waits for enabled state. */
-  toBeEnabled(options?: { timeout?: number }): Promise<void>;
+  /** Waits for one match to exist, visible or not; `attached: false` waits for none. */
+  toBeAttached(options?: { attached?: boolean; timeout?: number }): Promise<void>;
+  /** Waits for enabled state; `enabled: false` waits for disabled state. */
+  toBeEnabled(options?: { enabled?: boolean; timeout?: number }): Promise<void>;
   /** Waits for disabled state. */
   toBeDisabled(options?: { timeout?: number }): Promise<void>;
-  /** Waits for checked state. */
-  toBeChecked(options?: { timeout?: number }): Promise<void>;
+  /** Waits for checked state; `checked: false` waits for unchecked state. */
+  toBeChecked(options?: { checked?: boolean; timeout?: number }): Promise<void>;
   /** Waits for selected state. */
   toBeSelected(options?: { timeout?: number }): Promise<void>;
   /** Waits for expanded state. */
@@ -762,20 +773,20 @@ export interface AsyncExpectation {
   /** Waits for focused state. */
   toBeFocused(options?: { timeout?: number }): Promise<void>;
   /** Waits for exact normalized text; a list waits for exactly that many matches, each with its entry's text, in order. */
-  toHaveText(expected: TextMatch, options?: { timeout?: number }): Promise<void>;
-  toHaveText(expected: readonly TextMatch[], options?: { timeout?: number }): Promise<void>;
+  toHaveText(expected: TextMatch, options?: TextMatcherOptions): Promise<void>;
+  toHaveText(expected: readonly TextMatch[], options?: TextMatcherOptions): Promise<void>;
   /** Waits for contained normalized text; a list waits for each entry to be contained by a distinct match, in order, extra matches allowed. */
-  toContainText(expected: TextMatch, options?: { timeout?: number }): Promise<void>;
-  toContainText(expected: readonly TextMatch[], options?: { timeout?: number }): Promise<void>;
+  toContainText(expected: TextMatch, options?: TextMatcherOptions): Promise<void>;
+  toContainText(expected: readonly TextMatch[], options?: TextMatcherOptions): Promise<void>;
   /** Waits for a form control's value, compared as it is. */
   toHaveValue(expected: TextMatch, options?: { timeout?: number }): Promise<void>;
   /** Waits for the attribute to be present; with `value`, for it to match. */
   toHaveAttribute(name: string, options?: { timeout?: number }): Promise<void>;
-  toHaveAttribute(name: string, value: TextMatch, options?: { timeout?: number }): Promise<void>;
+  toHaveAttribute(name: string, value: TextMatch, options?: TextMatcherOptions): Promise<void>;
   /** Waits for an exact match count. */
   toHaveCount(expected: number, options?: { timeout?: number }): Promise<void>;
   /** Waits for an accessible name. */
-  toHaveAccessibleName(expected: TextMatch, options?: { timeout?: number }): Promise<void>;
+  toHaveAccessibleName(expected: TextMatch, options?: TextMatcherOptions): Promise<void>;
 }
 
 /**

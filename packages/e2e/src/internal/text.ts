@@ -59,6 +59,12 @@ export interface TextComparison {
   readonly mode: 'equals' | 'contains';
   /** Whether both sides are whitespace-normalized first. `false` compares the raw strings, as a form control's value is. */
   readonly normalize: boolean;
+  /**
+   * Playwright's `ignoreCase`: `true` folds case on both sides of a string
+   * comparison and adds the `i` flag to a regexp, `false` removes it from a
+   * regexp; absent leaves the pattern as written.
+   */
+  readonly ignoreCase?: boolean;
 }
 
 /**
@@ -77,11 +83,33 @@ export function matchesText(actual: string, pattern: TextPattern): boolean {
  * platform reports verbatim.
  */
 export function compareText(actual: string, pattern: TextPattern, comparison: TextComparison): boolean {
-  const subject = comparison.normalize ? normalizeText(actual) : actual;
-  if (pattern.kind === 'regexp') return testPattern(pattern.source, pattern.flags, subject);
-  const expected = comparison.normalize ? normalizeText(pattern.value) : pattern.value;
-  if (!pattern.exact) return subject.toLowerCase().includes(expected.toLowerCase());
+  const normalized = comparison.normalize ? normalizeText(actual) : actual;
+  if (pattern.kind === 'regexp') {
+    return testPattern(pattern.source, casedFlags(pattern.flags, comparison.ignoreCase), normalized);
+  }
+  const value = comparison.normalize ? normalizeText(pattern.value) : pattern.value;
+  if (!pattern.exact) return normalized.toLowerCase().includes(value.toLowerCase());
+  const fold = comparison.ignoreCase === true;
+  const subject = fold ? normalized.toLowerCase() : normalized;
+  const expected = fold ? value.toLowerCase() : value;
   return comparison.mode === 'equals' ? subject === expected : subject.includes(expected);
+}
+
+/**
+ * The regexp `ignoreCase` makes of `pattern`, as Playwright's matchers do:
+ * `true` adds the `i` flag, `false` removes it. A string pattern, or an
+ * absent `ignoreCase`, comes back as is.
+ */
+export function withIgnoreCase(pattern: TextPattern, ignoreCase: boolean | undefined): TextPattern {
+  if (pattern.kind !== 'regexp') return pattern;
+  return { ...pattern, flags: casedFlags(pattern.flags, ignoreCase) };
+}
+
+/** Regexp flags with the `i` flag added for `ignoreCase: true`, removed for `false`, and left alone when absent. */
+function casedFlags(flags: string, ignoreCase: boolean | undefined): string {
+  if (ignoreCase === undefined) return flags;
+  const rest = flags.replace('i', '');
+  return normalizeRegexpFlags(ignoreCase ? `${rest}i` : rest);
 }
 
 /** Renders a pattern for diagnostics. */

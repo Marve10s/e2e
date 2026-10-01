@@ -20,6 +20,8 @@ test('every matcher passes on the scripted screen', async ({ app, screen }) => {
   await expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled();
   await expect(screen.getByRole('button', { name: 'Disabled action' })).toBeDisabled();
   await expect(screen.getByRole('switch', { name: 'Dark mode' })).toBeChecked();
+  await expect(screen.getByRole('checkbox', { name: 'Notifications' })).toBeChecked({ checked: false });
+  await expect(screen.getByText('Hidden content')).toBeVisible({ visible: false });
   await expect(screen.getByRole('tab', { name: 'All' })).toBeSelected();
   await screen.getByRole('button', { name: 'Menu' }).tap();
   await expect(screen.getByRole('button', { name: 'Menu' })).toBeExpanded();
@@ -27,6 +29,7 @@ test('every matcher passes on the scripted screen', async ({ app, screen }) => {
   await expect(screen.getByLabel('Focus target')).toBeFocused();
   await expect(screen.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
   await expect(screen.getByRole('heading', { level: 1 })).toHaveText(/^Dash/);
+  await expect(screen.getByRole('heading', { level: 1 })).toHaveText('DASHBOARD', { ignoreCase: true });
   await expect(screen.getByTestId('card')).toContainText('body');
   await expect(screen.getByLabel('Search')).toHaveValue('hello-value');
   await expect(screen.getByLabel('Email')).toHaveValue('');

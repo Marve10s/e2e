@@ -266,6 +266,32 @@ void asyncExpectation.toContainText(['a', /b/]);
 void asyncExpectation.toHaveText(['a', 1]);
 // @ts-expect-error only toHaveText and toContainText take a list; a value is one string
 void asyncExpectation.toHaveValue(['a']);
+// Playwright's state flags and ignoreCase, on exactly the matchers that take them.
+void asyncExpectation.toBeVisible({ visible: false, timeout: 1000 });
+void asyncExpectation.toBeAttached({ attached: false });
+void asyncExpectation.toBeEnabled({ enabled: false });
+void asyncExpectation.toBeChecked({ checked: false });
+void asyncExpectation.toHaveText('a', { ignoreCase: true });
+void asyncExpectation.toHaveText(['a', /b/], { ignoreCase: true });
+void asyncExpectation.toContainText('a', { ignoreCase: false });
+void asyncExpectation.toHaveAccessibleName('a', { ignoreCase: true });
+void asyncExpectation.toHaveAttribute('x', 'a', { ignoreCase: true });
+// @ts-expect-error the presence form of toHaveAttribute takes no ignoreCase
+void asyncExpectation.toHaveAttribute('x', { ignoreCase: true });
+// @ts-expect-error toHaveValue compares the value as it is
+void asyncExpectation.toHaveValue('a', { ignoreCase: true });
+// @ts-expect-error toBeHidden has no visible flag; toBeVisible({ visible: false }) is the form
+void asyncExpectation.toBeHidden({ visible: true });
+// @ts-expect-error toBeChecked has no indeterminate state yet
+void asyncExpectation.toBeChecked({ indeterminate: true });
+// @ts-expect-error useInnerText is how text is read already, not an option
+void asyncExpectation.toHaveText('a', { useInnerText: true });
+// @ts-expect-error a state flag is a boolean
+void asyncExpectation.toBeChecked({ checked: 'false' });
+void screen.getByRole('button').waitFor({ state: 'attached' });
+void screen.getByRole('button').waitFor({ state: 'detached', timeout: 1000 });
+// @ts-expect-error waitFor takes Playwright's four states
+void screen.getByRole('button').waitFor({ state: 'gone' });
 
 // expect.poll carries every value matcher and no other, each resolving to void.
 declare const pollMatcherNames: Exclude<keyof PollExpectation<string>, 'not'>;
