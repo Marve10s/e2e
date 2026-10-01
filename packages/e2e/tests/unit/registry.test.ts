@@ -385,8 +385,18 @@ describe('collectFromRegistration', () => {
       test('token <secret:probe>', noop);
     }, undefined, redact);
     expect(() => collectFromRegistration('/root', '/root/tests/b.e2e.ts', colliding)).toThrow(
-      'duplicate title path token <secret:probe> in tests/b.e2e.ts; titles are compared with every registered secret value redacted to its <secret:name> marker',
+      'duplicate title path token <secret:probe> in tests/b.e2e.ts',
     );
+  });
+
+  it('redacts a title before normalizing it, so a value spelled in decomposed form still matches', async () => {
+    const decomposed = 'café-Kq7Zr2';
+    const registration = await collectModule(async () => {
+      test.describe(`group ${decomposed}`, () => {
+        test(`holds ${decomposed}`, noop);
+      });
+    }, undefined, (title) => title.replaceAll(decomposed, '<secret:probe>'));
+    expect(registration.tests[0]!.titlePath).toEqual(['group <secret:probe>', 'holds <secret:probe>']);
   });
 
   it('marks serial members with the unit source ID', async () => {

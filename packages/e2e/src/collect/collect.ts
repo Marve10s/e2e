@@ -199,9 +199,8 @@ function toCollectedTests(
   return registration.tests.map((registered) => {
     const encoded = testId(file, registered.titlePath);
     if (seenTitlePaths.has(encoded)) {
-      const redacted = registered.titlePath.some((title) => title.includes('<secret:'));
       throw new CollectionError(
-        `duplicate title path ${registered.titlePath.join(' > ')} in ${file}${redacted ? '; titles are compared with every registered secret value redacted to its <secret:name> marker' : ''}`,
+        `duplicate title path ${registered.titlePath.join(' > ')} in ${file}`,
       );
     }
     seenTitlePaths.add(encoded);

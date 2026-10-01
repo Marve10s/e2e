@@ -143,7 +143,7 @@ class Collector {
     this.assertOpen(kind === 'setup' ? 'test.setup()' : 'test()');
     const titleError = validateTitle(title);
     if (titleError !== null) throw new CollectionError(titleError);
-    const normalizedTitle = this.redactTitle(title.normalize('NFC'));
+    const normalizedTitle = this.redactTitle(title).normalize('NFC');
     if (typeof fn !== 'function') throw new CollectionError('test body must be a function');
     if (kind === 'setup') {
       if (this.currentGroup !== undefined) {
@@ -196,7 +196,7 @@ class Collector {
     if (typeof body !== 'function') throw new CollectionError('describe body must be a function');
     validateDescribeOptions(options, this.currentGroup);
     const group: GroupNode = {
-      title: this.redactTitle(title.normalize('NFC')),
+      title: this.redactTitle(title).normalize('NFC'),
       options,
       parent: this.currentGroup,
       serial: options.serial === true,

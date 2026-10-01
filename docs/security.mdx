@@ -134,12 +134,14 @@ holds. That includes a value the test passes as a plain string rather than
 a `secrets.get()` handle: test and `describe` titles, step labels (an
 `app.open` URL, a locator's text), an `agent.act` or `agent.assert`
 instruction and the strings in its params, `agentContext`, and an
-`e2e explore` goal. Titles are
-redacted as the test file is collected, so the test id, `--grep`, the
-reporters, and the artifact and failure-page file names all see
-`<secret:name>`, and two titles that differ only in a secret value are a
-duplicate title path. A custom executor's `ctx.step` and the built-in
-agent's prompt carry the marker, so only a handle can type the real value. It matches the value as written, JSON-escaped, HTML-escaped, and
+`e2e explore` goal. Titles are redacted as the test file is collected, so
+the test id, `--grep`, the reporters, and the artifact and failure-page file
+names all see `<secret:name>`, and two titles in one file that differ only
+in a secret value are a duplicate title path. A custom executor's
+`ctx.step` and the built-in agent's prompt carry the marker, so only a
+handle can type the real value.
+
+Matching covers the value as written, JSON-escaped, HTML-escaped, and
 percent-encoded, in any letter case (so a CSS `text-transform` does not hide
 it), and with its whitespace collapsed. Text cut at a length limit is masked
 too when it ends with the first 8 or more characters of a value (half of a
