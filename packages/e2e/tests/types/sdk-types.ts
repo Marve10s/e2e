@@ -486,6 +486,10 @@ report.run.results[0]!.tags satisfies readonly string[];
 // Every result says which `--repeat-each` run it is, 0 without the flag.
 report.run.results[0]!.repeat satisfies number;
 report.run.explore satisfies { goal: string; findings: readonly { severity: 1 | 2 | 3 | 4 | 5; artifactId?: string | undefined }[] } | undefined;
+// A --last-failed rerun carries what it owed and left out as full results, groups, and hook errors, never a looser shape.
+report.run.carried satisfies
+  | { results: Report['run']['results']; serialGroups: Report['run']['serialGroups']; errors: Report['run']['errors'] }
+  | undefined;
 
 // An explore run's events narrow to the exploration's progress.
 if (runEvent.type === 'explore') {

@@ -187,6 +187,7 @@ async function bootstrap(
     ),
     runId: message.runId,
     artifactsRoot: message.artifactsRoot,
+    rerunDir: message.rerunDir,
     headed: message.headed,
     workerSlot: message.workerSlot,
     env: process.env,
