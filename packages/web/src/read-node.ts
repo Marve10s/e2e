@@ -51,7 +51,8 @@ export interface RawNodeData {
   attributes: Record<string, string>;
   /** Value of the project's test-id attribute, when the element carries one. */
   testId: string | null;
-  rect: { x: number; y: number; width: number; height: number };
+  /** The element's box in its document's viewport; null when it lays out no box (`display: none`). */
+  rect: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** One observed node plus its position in the flattened depth-first tree. */

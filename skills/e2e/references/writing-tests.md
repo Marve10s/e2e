@@ -168,7 +168,9 @@ substring; a `RegExp` matches as written.
   scoping under another locator. Any other `filter` key (`hasNot`,
   `hasNotText`) or an empty `filter({})` is `INVALID_LOCATOR`.
 - `visible: true` drops nodes the page hides (a closed drawer) before the
-  exactly-one rule.
+  exactly-one rule. Visibility is what renders, as `toBeVisible()` reads it:
+  an `aria-hidden` spinner that paints is visible, so `toBeHidden()` waits
+  for it to go.
 - On the web, queries reach open shadow roots and closed roots attached with
   `attachShadow`, not declarative closed roots. `browser.locator(css)`,
   `frameLocator`, and `filter({ hasText })` stop at a closed root; query the

@@ -295,7 +295,7 @@ function assembleTree(
     // bordered iframe is off by its border width, which is within a tap
     // target. A frame under a CSS transform is not unwound: its boxes are
     // where the untransformed frame would put them.
-    if (embedded !== undefined) childLists[index]!.unshift(placeInFrame(embedded, raw.rect));
+    if (embedded !== undefined && raw.rect !== null) childLists[index]!.unshift(placeInFrame(embedded, raw.rect));
     const node = toSemanticNode({ id: ids[index]!, revision: '' }, raw, childLists[index]!, framePath);
     built[index] = node;
     if (raw.parent >= 0) childLists[raw.parent]!.unshift(node);
@@ -355,7 +355,7 @@ export function toSemanticNode(
     states,
     ...(raw.level !== null ? { level: raw.level } : {}),
     attributes: raw.attributes,
-    rect: raw.rect,
+    ...(raw.rect !== null ? { rect: raw.rect } : {}),
     ...(framePath.length > 0 ? { framePath } : {}),
     ...(children.length > 0 ? { children } : {}),
   };

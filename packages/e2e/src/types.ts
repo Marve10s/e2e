@@ -334,7 +334,7 @@ export interface TextMatchOptions {
 /**
  * Role query options. A role query never matches a node hidden from the
  * accessibility tree, on every engine; `visible` (inherited) is the one knob
- * that narrows the other query kinds the same way.
+ * that narrows the other query kinds, to the nodes `toBeVisible()` accepts.
  */
 export interface RoleOptions extends TextMatchOptions {
   /** Accessible name filter. */
