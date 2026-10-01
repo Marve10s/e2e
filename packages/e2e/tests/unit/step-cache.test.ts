@@ -11,7 +11,9 @@ import { recordedVerdictOf, StepTraceSession, type StepCacheHost, type StepCache
 import { AgentError } from '../../src/agent/error.ts';
 import type { ExecutorActions } from '../../src/agent/executor.ts';
 import type { SettleMode } from '../../src/agent/settle-policy.ts';
+import type { RedactedNode } from '../../src/agent/observation.ts';
 import type { SemanticNode } from '../../src/engine/surface.ts';
+import { redacted, redactedNodes } from '../helpers/redacted.ts';
 import type { JsonValue } from '../../src/types.ts';
 
 const savedMarker: SemanticNode = {
@@ -22,8 +24,8 @@ const savedMarker: SemanticNode = {
 };
 const savedAnchor = { role: 'status', name: 'Marker', text: 'saved' };
 
-function nodeMap(list: readonly SemanticNode[]): ReadonlyMap<string, SemanticNode> {
-  return new Map(list.map((node) => [node.ref.id, node]));
+function nodeMap(list: readonly SemanticNode[]): ReadonlyMap<string, RedactedNode> {
+  return redactedNodes(list);
 }
 
 function fakeContext(read: AgentCacheContext['store']['read']): AgentCacheContext {
@@ -67,7 +69,6 @@ function makeHost(
     signal: new AbortController().signal,
     // Short enough that a missing anchor is not waited for across the backoff.
     remainingMs: () => 50,
-    redact: (text) => text,
     traceEligible: true,
     replaying: () => undefined,
   };
@@ -256,7 +257,7 @@ describe('StepTraceSession', () => {
     await withheld.begin();
     withheld.record({
       name: 'tap',
-      node: { ref: { id: 'n1', revision: 'r1' }, role: 'button', name: 'Upgrade' },
+      node: redacted({ ref: { id: 'n1', revision: 'r1' }, role: 'button', name: 'Upgrade' }),
     });
     await withheld.conclude('passed', 'passed');
     expect(unanchored.staged).toHaveLength(0);
@@ -292,7 +293,7 @@ describe('StepTraceSession', () => {
       ),
     );
     await session.begin();
-    session.record({ name: 'tap', node: { ...button, ref: { id: 'b', revision: 'r2' } } });
+    session.record({ name: 'tap', node: redacted({ ...button, ref: { id: 'b', revision: 'r2' } }) });
     await session.conclude('passed', 'saved the marker');
     expect(stagedTrace(context).endAnchors).toEqual([savedAnchor]);
     expect(stagedTrace(context).endPath).toBe('/storage');
@@ -433,7 +434,7 @@ describe('StepTraceSession', () => {
     await session.begin();
     expect(session.replayedPrefix?.stopReason).toBe('end-mismatch');
     // The replayed flow did not produce its effect; the executor acted further.
-    session.record({ name: 'tap', node: { ref: { id: 's', revision: 'r2' }, role: 'button', name: 'Save' } });
+    session.record({ name: 'tap', node: redacted({ ref: { id: 's', revision: 'r2' }, role: 'button', name: 'Save' }) });
     await session.conclude('passed', 'saved after all');
     expect(context.staged).toHaveLength(0);
     expect(deleted).toEqual(['a'.repeat(64)]);
