@@ -59,7 +59,9 @@ Locator strictness: except for `toHaveCount` and the list form of
 match; zero matches keep polling until the timeout, and multiple matches fail
 immediately with `LOCATOR_AMBIGUOUS`. `toBeHidden`, `toBeVisible({ visible:
 false })`, `toBeAttached({ attached: false })`, negated visibility, and
-negated `toBeAttached` accept zero matches.
+negated `toBeAttached` accept zero matches; for them, and for
+`waitFor({ state: 'detached' })` and `'hidden'`, a locator under a frame that
+is not in the document is zero matches rather than a wait for the frame.
 
 Text comparison is normalized: leading and trailing whitespace is trimmed and
 each run of whitespace collapses to one space. `toHaveText` and

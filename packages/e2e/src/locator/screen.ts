@@ -122,6 +122,9 @@ const ROLE_OPTION_KEYS = ['name', ...ROLE_FILTER_KEYS] as const;
 /** The states `locator.waitFor` waits for, Playwright's four. */
 const WAIT_FOR_STATES: readonly string[] = ['attached', 'detached', 'visible', 'hidden'];
 
+/** The states absence satisfies: a frame missing from the document reads as zero matches for them. */
+const ABSENCE_STATES: ReadonlySet<string> = new Set(['detached', 'hidden']);
+
 type WaitForState = NonNullable<NonNullable<Parameters<Locator['waitFor']>[0]>['state']>;
 
 /**
@@ -569,7 +572,7 @@ class LocatorImpl extends ScreenImpl implements Locator {
         signal: engine.signal,
         negated: false,
         evaluate: async () => {
-          const { node } = await engine.tryRead(this.expression, deadline);
+          const { node } = await engine.tryRead(this.expression, deadline, ABSENCE_STATES.has(state) ? 'empty' : 'wait');
           return inWaitForState(node, state);
         },
         onTimeout: () =>
