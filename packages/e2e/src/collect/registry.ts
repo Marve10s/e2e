@@ -123,6 +123,20 @@ class Collector {
     return { tests: this.tests, hooks: this.hooks };
   }
 
+  /**
+   * The title as it registers: validated as written, redacted, then
+   * normalized to NFC, and validated again, since a marker can be longer
+   * than the value it replaces.
+   */
+  private title(raw: string): string {
+    const rawError = validateTitle(raw);
+    if (rawError !== null) throw new CollectionError(rawError);
+    const title = this.redactTitle(raw).normalize('NFC');
+    const error = title === raw.normalize('NFC') ? null : validateTitle(title);
+    if (error !== null) throw new CollectionError(`${error} once secret values are redacted`);
+    return title;
+  }
+
   private assertOpen(api: string): void {
     if (this.closed) {
       throw new CollectionError(
@@ -141,9 +155,7 @@ class Collector {
     fixtures: readonly FixtureDefinition[],
   ): TestCase {
     this.assertOpen(kind === 'setup' ? 'test.setup()' : 'test()');
-    const titleError = validateTitle(title);
-    if (titleError !== null) throw new CollectionError(titleError);
-    const normalizedTitle = this.redactTitle(title).normalize('NFC');
+    const normalizedTitle = this.title(title);
     if (typeof fn !== 'function') throw new CollectionError('test body must be a function');
     if (kind === 'setup') {
       if (this.currentGroup !== undefined) {
@@ -191,12 +203,11 @@ class Collector {
 
   registerDescribe(title: string, options: DescribeOptions, body: () => unknown): void {
     this.assertOpen('describe()');
-    const titleError = validateTitle(title);
-    if (titleError !== null) throw new CollectionError(titleError);
+    const normalizedTitle = this.title(title);
     if (typeof body !== 'function') throw new CollectionError('describe body must be a function');
     validateDescribeOptions(options, this.currentGroup);
     const group: GroupNode = {
-      title: this.redactTitle(title).normalize('NFC'),
+      title: normalizedTitle,
       options,
       parent: this.currentGroup,
       serial: options.serial === true,

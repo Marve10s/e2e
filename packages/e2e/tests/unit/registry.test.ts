@@ -399,6 +399,18 @@ describe('collectFromRegistration', () => {
     expect(registration.tests[0]!.titlePath).toEqual(['group <secret:probe>', 'holds <secret:probe>']);
   });
 
+  it('checks the title limit again once a marker longer than the value replaces it', async () => {
+    const value = 'Kq7Zr2';
+    const title = `${'a'.repeat(512 - value.length)}${value}`;
+    const redact = (text: string) => text.replaceAll(value, '<secret:probe>');
+    await expect(collectModule(async () => test(title, noop), undefined, redact)).rejects.toThrow(
+      'title must be 1 through 512 UTF-8 bytes after NFC, got 520 once secret values are redacted',
+    );
+    await expect(collectModule(async () => test.describe(title, () => undefined), undefined, redact)).rejects.toThrow(
+      'once secret values are redacted',
+    );
+  });
+
   it('marks serial members with the unit source ID', async () => {
     const registration = await collectModule(async () => {
       test.describe('wizard', { serial: true }, () => {

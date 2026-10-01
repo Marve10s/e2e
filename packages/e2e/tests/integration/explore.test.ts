@@ -227,9 +227,18 @@ describe('e2e explore', () => {
   it('redacts a registered secret value the goal spells out from the title, artifact names, report, and model input', async () => {
     const value = 'goal-Secret-5Tq8Wz';
     const goal = `Explore the home page with key ${value}`;
+    let plans = 0;
     const model = installExploreModel({
-      plan: () => ({ decision: 'finish', summary: 'Nothing to report.' }),
-      loop: () => [{ toolName: 'complete_step', input: { status: 'passed', summary: 'Looked' } }],
+      plan: () => {
+        plans += 1;
+        return plans === 1
+          ? { decision: 'step', title: 'Counter', instruction: 'Look at the counter' }
+          : { decision: 'finish', summary: 'One issue.' };
+      },
+      loop: (call) =>
+        call.turn === 1
+          ? [{ toolName: FINDING_TOOL_NAME, input: COUNTER_FINDING }]
+          : [{ toolName: 'complete_step', input: { status: 'passed', summary: 'Looked' } }],
     });
     const outcome = await explore({
       cwd: project.dir,
@@ -246,7 +255,12 @@ describe('e2e explore', () => {
     expect(result.titlePath).toEqual(['Explore the home page with key <secret:probe>']);
     expect(outcome.report.run.explore!.goal).toBe('Explore the home page with key <secret:probe>');
     expect(fakeCalls[0]!.system).toContain('Exploration goal: Explore the home page with key <secret:probe>');
-    expect(JSON.stringify([outcome.report, fakeCalls])).not.toContain(value);
+    // The explorer's loop ran, carrying the goal as context.
+    expect(loopCalls.length).toBeGreaterThan(0);
+    expect(loopCalls[0]!.system).toContain('Exploration goal: Explore the home page with key <secret:probe>');
+    const paths = result.attempts[0]!.artifacts.map((artifact) => artifact.path ?? '');
+    expect(paths.some((entry) => entry.startsWith('web/explore-the-home-page-with-key-secret-'))).toBe(true);
+    expect(JSON.stringify([outcome.report, fakeCalls, loopCalls])).not.toContain(value);
     expect(readFileSync(path.join(project.dir, '.e2e', 'report.json'), 'utf8')).not.toContain(value);
 
     // A goal at the ceiling that the markers push past it is refused before anything starts.

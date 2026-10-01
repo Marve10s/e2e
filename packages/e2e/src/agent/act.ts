@@ -143,8 +143,11 @@ export async function dispatchAgentStep(
   agent: DispatchAgent = runtime.select(raw.agent),
 ): Promise<ActResult> {
   const spec = redactSpec(raw, runtime.redact);
+  // Redacted per step, not once per agent: the ledger is live, so a value
+  // resolved since the agent was selected is covered too.
+  const context = agent.agentContext === undefined ? undefined : runtime.redact(agent.agentContext);
   return runtime.steps.run('agent', spec.api, spec.instruction, async () => {
-    const dispatch = new ActDispatch(runtime, spec, agent);
+    const dispatch = new ActDispatch(runtime, spec, { ...agent, agentContext: context });
     try {
       let verdict: StepVerdict;
       try {
