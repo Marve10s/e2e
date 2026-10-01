@@ -15,6 +15,7 @@
 import type { Download, Response, Route } from 'playwright';
 import type { ActionOptions, Expectable, JsonValue, Locator, Screen, TextMatch } from 'e2e';
 import {
+  ConfigurationError,
   Deadline,
   describePattern,
   EngineError,
@@ -445,11 +446,15 @@ export function createBrowserFixture(surface: PlaywrightSurface, context: Engine
     setCookies(cookies) {
       const scheme = new URL(baseHref()).protocol === 'https:' ? 'https' : 'http';
       // The harness's URL rule decides which cookie targets are admitted; a
-      // domain cookie is checked as the origin it would be sent to.
+      // domain cookie is checked as the origin it would be sent to. The rule
+      // admits `about:blank` for navigation, which holds no cookie.
       for (const cookie of cookies) {
-        context.app.resolveUrl(
+        const target = context.app.resolveUrl(
           cookie.url === undefined ? `${scheme}://${cookie.domain.replace(/^\./, '')}` : cookie.url,
         );
+        if (!/^https?:/.test(target)) {
+          throw new ConfigurationError('POLICY_DENIED', `cookie URL must be http(s): ${target}`);
+        }
       }
       return surface.guard(context.operation(), 'setCookies', async () => {
         await surface.requireContext().addCookies(

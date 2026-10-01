@@ -616,6 +616,10 @@ test('app.open and browser.goto admit about:blank', async ({ app, browser }) => 
   await browser.goto('about:blank');
   if ((await browser.url()) !== 'about:blank') throw new Error('not blank: ' + (await browser.url()));
 });
+test('setCookies refuses about:blank', async ({ app, browser }) => {
+  await app.open();
+  await browser.setCookies([{ name: 'flavor', value: 'oatmeal', url: 'about:blank' }]);
+});
 test('browser.goto refuses view-source', async ({ app, browser }) => {
   await app.open();
   await browser.goto('view-source:' + marker);
@@ -849,6 +853,9 @@ describe('web platform integration', () => {
       expect(result!.attempts[0]!.error?.message, title).toMatch(/^forbidden URL scheme: (view-source|blob|about):$/);
     }
     expect(resultByTitle(outcome, 'app.open and browser.goto admit about:blank').status).toBe('passed');
+    const cookie = resultByTitle(outcome, 'setCookies refuses about:blank');
+    expect(cookie.status).toBe('failed');
+    expect(cookie.attempts[0]!.error).toMatchObject({ code: 'POLICY_DENIED', message: 'cookie URL must be http(s): about:blank' });
   });
 
   it('exits with configuration precedence and writes report.json', () => {

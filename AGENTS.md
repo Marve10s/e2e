@@ -415,7 +415,8 @@ trees, on both platforms, without a device.
     `browser.goto`, the `navigate` verb) goes through one rule,
     `resolveNavigationUrl`: only `http:`, `https:`, and the exact
     `about:blank` pass; every other scheme (`view-source:file:` included) and
-    a malformed URL is `POLICY_DENIED`. `device.openLink` takes custom app
+    a malformed URL is `POLICY_DENIED` (a relative URL on a target with no
+    `app.url` is `APP_URL_REQUIRED`). `device.openLink` takes custom app
     schemes, so it refuses a list instead (`packages/mobile/src/links.ts`):
     `file:`, `data:`, `javascript:`, `view-source:`, `blob:`, `filesystem:`.
     There is no origin or host allowlist; PR #290 removed them on purpose, since a
