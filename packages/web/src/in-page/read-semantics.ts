@@ -663,8 +663,13 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     return shown.length === 0 ? null : shown;
   };
 
-  /** Text owned directly by an element, excluding descendant elements. */
+  /**
+   * Text owned directly by an element, excluding descendant elements. An
+   * element with `content-visibility: hidden` renders none of it, as its
+   * `innerText` reads empty, so it owns none.
+   */
   const directTextOf = memoized((el: Element): string => {
+    if (styleOf(el)?.getPropertyValue('content-visibility') === 'hidden') return '';
     let out = '';
     for (const child of Array.from(el.childNodes)) {
       if (child.nodeType === 3) out += child.nodeValue ?? '';

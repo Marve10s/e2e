@@ -219,12 +219,16 @@ describe('the tree walk through hidden content', () => {
     await page.setContent(`
       <div style="visibility:hidden"><button>Hidden parent</button><div><button style="visibility:visible">Shown child</button></div></div>
       <div aria-hidden="true"><button>Decorative</button></div>
-      <div style="content-visibility:hidden;width:50px;height:50px" data-testid="skipping"><button>Skipped</button></div>
+      <div style="content-visibility:hidden;width:50px;height:50px" data-testid="skipping">Skipped text<button>Skipped</button></div>
       <div style="display:contents;visibility:hidden"><button>Contents hidden</button></div>
     `);
     const nodes = await captureTree();
     const buttons = nodes.filter((node) => node.role === 'button');
     expect(buttons.map((node) => [node.name, node.states?.hidden])).toEqual([['Shown child', undefined]]);
-    expect(nodes.find((node) => node.testId === 'skipping')?.states?.hidden).toBeUndefined();
+    const skipping = nodes.find((node) => node.testId === 'skipping');
+    expect(skipping?.states?.hidden).toBeUndefined();
+    // The container keeps its box and paints none of its text, which innerText reads empty too.
+    expect(skipping?.text).toBe('');
+    expect(await page.getByTestId('skipping').innerText()).toBe('');
   });
 });
