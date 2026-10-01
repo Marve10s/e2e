@@ -114,7 +114,7 @@ describe('projectExpression', () => {
     const projected = projectExpression(page, visibleLabel);
     const visibleLabelChain = [
       expect.stringMatching(/^locator\(e2e-label=/),
-      'filter(visible=true)',
+      'locator(e2e-shown=)',
     ];
     expect(chainOf(projected.locator)).toEqual(visibleLabelChain);
     expect(projected.visible).toBe(true);
@@ -126,14 +126,14 @@ describe('projectExpression', () => {
     };
     expect(chainOf(projectExpression(page, visibleValue).locator)).toEqual([
       'locator(e2e-roots=input:not([type="checkbox" i]):not([type="radio" i]), textarea, select)',
-      'filter(visible=true)',
+      'locator(e2e-shown=)',
     ]);
     const visibleText: LocatorExpression = {
       kind: 'query',
       query: { kind: 'text', value: { kind: 'string', value: 'Save', exact: true }, visible: true },
     };
     expect(chainOf(projectExpression(page, visibleText).locator)).toEqual([
-      ROOTS, 'text(Save,exact)', 'filter(visible=true)',
+      ROOTS, 'text(Save,exact)', 'locator(e2e-shown=)',
     ]);
   });
 

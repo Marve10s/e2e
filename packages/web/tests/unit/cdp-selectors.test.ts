@@ -11,7 +11,7 @@ it('registers every owned selector engine, and nothing else, through a dynamical
   const channel = new Proxy({}, { get: (_target, key) => key === 'registerSelectorEngine' ? register : undefined });
   const options = budget();
   await registerCdpSelectors({ _channel: channel } as unknown as BrowserContext, options);
-  expect(SELECTOR_ENGINES).toHaveLength(3);
+  expect(SELECTOR_ENGINES).toHaveLength(4);
   expect(register).toHaveBeenCalledTimes(SELECTOR_ENGINES.length);
   for (const { name, source } of SELECTOR_ENGINES) {
     expect(register).toHaveBeenCalledWith({ selectorEngine: {

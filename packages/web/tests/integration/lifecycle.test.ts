@@ -568,6 +568,11 @@ describe('web engine lifecycle', () => {
       expect(await locate({ kind: 'index', source: text('Decorative twin', true), index: 1 })).toEqual([]);
       expect(hidden(await locate({ kind: 'index', source: text('Decorative twin', true), index: 'last' }))).toEqual([undefined]);
 
+      // The reader's own state narrows inside the chain, so a twin only Playwright calls visible is never first.
+      const contents = await locate({ kind: 'index', source: text('Contents twin', true), index: 'first' });
+      expect(contents.map((node) => [node.attributes?.['id'], node.states?.hidden])).toEqual([['contents-shown', undefined]]);
+      expect(hidden(await locate({ kind: 'index', source: text('Contents twin', false), index: 'first' }))).toEqual([true]);
+
       // A filter over a visible query never retains the hidden twin.
       const decorative = { kind: 'string', value: 'Decorative', exact: false } as const;
       expect(await locate({ kind: 'filter', source: text('Decorative twin', false), hasText: decorative })).toHaveLength(2);
