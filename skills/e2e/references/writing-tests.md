@@ -317,7 +317,9 @@ credentials: {
   A function is read at fill time and redacted only from that fill on.
 - `E2E_USER_<NAME>_USERNAME` and `E2E_USER_<NAME>_PASSWORD` override either
   field per run, even over a function; `<NAME>` is the credential name
-  uppercased, every character outside `[A-Z0-9]` as `_`.
+  uppercased, every character outside `[A-Z0-9]` as `_`. Two credentials (or
+  two secrets) mapping to one variable, `svc-a` and `svc_a`, are
+  `INVALID_CONFIG`.
 - `credentials.user('admin').password` is a `Secret` with no plaintext
   accessor, named `admin.password` to the agent and in reports; `secrets.get()`
   never returns it (separate namespaces). Only `fill()` and `agent.act` params accept it, stringifying it

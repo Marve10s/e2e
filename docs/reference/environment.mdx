@@ -32,7 +32,12 @@ See [Models](/models) and [Subscriptions](/subscriptions).
 | `E2E_SECRET_<NAME>` | set | Replaces the value of `secrets.<name>` |
 
 `<NAME>` is the name uppercased with every character outside `A-Z0-9`
-replaced by `_`, so `power-user` becomes `E2E_USER_POWER_USER_USERNAME`. A
+replaced by `_`, so `power-user` becomes `E2E_USER_POWER_USER_USERNAME`. Two
+credentials, or two secrets, whose names map to the same variable (`api-key`
+and `api_key` both read `E2E_SECRET_API_KEY`) are `INVALID_CONFIG` at config
+load, whether or not the variable is set, so one rotation never replaces two
+entries; the message names the entries and the variable. A credential and a
+secret may share a name, since their prefixes differ. A
 variable for a name absent from the config is ignored. An empty value is
 `INVALID_CONFIG`, and so is a password or secret shorter than 6 characters
 (code points): redaction rewrites every occurrence of a value, and one that

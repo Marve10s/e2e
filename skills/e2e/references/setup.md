@@ -239,7 +239,7 @@ For an app started elsewhere, point `app.url` at it, literally or via
 | --- | --- |
 | `AI_GATEWAY_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, ... | Read by provider packages, not the runner. |
 | `E2E_USER_<NAME>_USERNAME`, `E2E_USER_<NAME>_PASSWORD` | Override `credentials.<name>`; `<NAME>` is the name uppercased, other characters `_`. |
-| `E2E_SECRET_<NAME>` | Overrides `secrets.<name>`, same rule. |
+| `E2E_SECRET_<NAME>` | Overrides `secrets.<name>`, same rule. Two entries of one namespace mapping to one variable are `INVALID_CONFIG`. |
 | `CI` | CI defaults; list in topic `running`. |
 | `E2E_TELEMETRY_DISABLED`, `DO_NOT_TRACK` | Disable anonymous telemetry, as does `e2e telemetry disable`; `E2E_TELEMETRY_DEBUG=1` prints events instead of sending. |
 

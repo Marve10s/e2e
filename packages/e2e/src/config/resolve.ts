@@ -761,6 +761,8 @@ function resolveSecrets(
   const credentials = new Map<string, ResolvedCredential>();
   const secrets = new Map<string, ResolvedSecret>();
   const allSecrets = new Map<string, ResolvedSecret>();
+  checkEnvNameCollisions('E2E_USER', 'credentials', Object.keys(raw.credentials ?? {}));
+  checkEnvNameCollisions('E2E_SECRET', 'secrets', Object.keys(raw.secrets ?? {}));
   for (const [name, credential] of Object.entries(raw.credentials ?? {})) {
     const prefix = envName('E2E_USER', name);
     const username = env[`${prefix}_USERNAME`] ?? credential.username;
@@ -791,6 +793,32 @@ function resolveSecrets(
     allSecrets.set(name, secret);
   }
   return { credentials, secrets, allSecrets };
+}
+
+/**
+ * Two entries of one namespace whose names map to the same override variable
+ * (`api-key` and `api_key` both read `E2E_SECRET_API_KEY`) would both take one
+ * rotated value, so the config load refuses them, whether or not the variable
+ * is set. The message names the entries and the variable, never a value.
+ */
+function checkEnvNameCollisions(prefix: 'E2E_USER' | 'E2E_SECRET', namespace: string, names: readonly string[]): void {
+  const byEnvName = new Map<string, string[]>();
+  for (const name of names) {
+    const variable = envName(prefix, name);
+    byEnvName.set(variable, [...(byEnvName.get(variable) ?? []), name]);
+  }
+  for (const [variable, group] of byEnvName) {
+    if (group.length < 2) continue;
+    const quoted = group.map((name) => `"${name}"`);
+    const entries = `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)!}`;
+    const variables = prefix === 'E2E_USER'
+      ? `the override variables ${variable}_USERNAME and ${variable}_PASSWORD`
+      : `the override variable ${variable}`;
+    throw new ConfigurationError(
+      'INVALID_CONFIG',
+      `${namespace} ${entries} share ${variables}, so one value set there would replace all of them; rename all but one`,
+    );
+  }
 }
 
 /**
