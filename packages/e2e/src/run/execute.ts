@@ -35,6 +35,7 @@ import { createExtendedFixtures } from './extended-fixtures.ts';
 import { captureFailureEvidence } from './failure-evidence.ts';
 import { createFixtures, type ArtifactSink } from './fixtures.ts';
 import { publishAttempt } from '../expect/attempt.ts';
+import { openPollScope, type PollScope } from '../expect/poll-scope.ts';
 import { SoftFailures } from '../expect/soft.ts';
 import { findRegistered, RealmManager, runHook, type FileRef, type Realm } from './realm.ts';
 import type {
@@ -876,6 +877,8 @@ export class TargetExecutor implements SerialHost {
     let skipped: RuntimeSkip | undefined;
     let phase: AttemptPhase = 'launch';
     let timedOut = false;
+    // The polls the fixtures, the beforeEach hooks, and the body start.
+    let bodyPolls: PollScope | undefined;
     // Captured the moment the primary failure lands: steps that pass later —
     // afterEach cleanup, teardown — must not confirm traces the failure
     // implicated (a cleanup assertion says nothing about the failed flow).
@@ -1001,24 +1004,28 @@ export class TargetExecutor implements SerialHost {
       );
 
       /**
-       * Steps the body left running when it settled were not awaited. Each
-       * is recorded as failed at its call, cancelled through the attempt
-       * signal the way a timeout cancels the body, and waited for within one
-       * cleanup budget, so teardown starts on a quiet session. Left alone,
-       * such a step would fail once the session closed with nobody to catch
-       * it and take the worker down.
+       * Steps and polls the body left running when it settled were not
+       * awaited. A step is recorded as failed at its call, cancelled through
+       * the attempt signal the way a timeout cancels the body, and waited for
+       * within one cleanup budget, so teardown starts on a quiet session.
+       * Left alone, such a step would fail once the session closed with
+       * nobody to catch it and take the worker down. A poll is cancelled
+       * alone; left alone, its timeout would fail whatever ran then.
+       * Returns their errors, steps first.
        */
-      const abandonNotAwaited = async (): Promise<TestError | undefined> => {
-        if (attemptEnd.signal.aborted) return undefined;
-        const notAwaited = steps.abandonRunning();
-        if (notAwaited === undefined) return undefined;
-        attemptAbort.abort();
-        await withTimeout(
-          steps.settleAbandoned(),
-          this.config.cleanupTimeout,
-          () => new Error('abandoned steps did not settle'),
-        ).catch(() => undefined);
-        return notAwaited;
+      const abandonNotAwaited = async (): Promise<TestError[]> => {
+        if (attemptEnd.signal.aborted) return [];
+        const pollsNotAwaited = bodyPolls?.close();
+        const stepsNotAwaited = steps.abandonRunning();
+        if (stepsNotAwaited !== undefined) {
+          attemptAbort.abort();
+          await withTimeout(
+            steps.settleAbandoned(),
+            this.config.cleanupTimeout,
+            () => new Error('abandoned steps did not settle'),
+          ).catch(() => undefined);
+        }
+        return [stepsNotAwaited, pollsNotAwaited].filter((error) => error !== undefined);
       };
       const mainWork = async (): Promise<void> => {
         try {
@@ -1035,7 +1042,7 @@ export class TargetExecutor implements SerialHost {
           const notAwaited = await abandonNotAwaited();
           const softFailure = soft.close();
           if (!isRuntimeSkip(cause)) {
-            for (const secondary of [notAwaited, softFailure]) {
+            for (const secondary of [...notAwaited, softFailure]) {
               if (secondary !== undefined) {
                 secondaryErrors.push(serializeError(secondary, { phase: 'body', projectRoot: this.config.projectRoot, redact }));
               }
@@ -1043,7 +1050,10 @@ export class TargetExecutor implements SerialHost {
           }
           throw cause;
         }
-        const notAwaited = await abandonNotAwaited();
+        const [notAwaited, ...moreNotAwaited] = await abandonNotAwaited();
+        for (const secondary of moreNotAwaited) {
+          secondaryErrors.push(serializeError(secondary, { phase: 'body', projectRoot: this.config.projectRoot, redact }));
+        }
         if (notAwaited !== undefined) throw notAwaited;
         // Soft failures fail the attempt once the body has settled, before
         // `afterEach`; a soft matcher in a hook finds collection closed and throws.
@@ -1057,6 +1067,7 @@ export class TargetExecutor implements SerialHost {
       // own timeout — minutes, on a device target. The abandoned body goes
       // down with the worker process; the attempt records the interrupt and
       // moves to cleanup.
+      bodyPolls = openPollScope('the test body');
       const work = this.options.isolated
         ? withAbort(
             mainWork(),
@@ -1088,6 +1099,8 @@ export class TargetExecutor implements SerialHost {
         // The race has settled: a rejection surfacing while the evidence is
         // captured is recorded, not aimed at it.
         cutBody = undefined;
+        // A body cut short may have been awaiting its polls; they end with it.
+        bodyPolls?.close();
         // `skipRunningTest` has already refused the cases that may not skip.
         if (isRuntimeSkip(cause)) skipped = cause;
         else {
@@ -1147,6 +1160,7 @@ export class TargetExecutor implements SerialHost {
     } catch (cause) {
       recordFailure(cause, phase);
     } finally {
+      bodyPolls?.close();
       this.strayFailure = undefined;
       this.lastAttemptTestId = pair.test.id;
       attemptEnd.abort();
