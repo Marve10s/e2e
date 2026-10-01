@@ -20,6 +20,7 @@ import {
   EngineError,
   matchesText,
   pollCondition,
+  rejectUnknownOptions,
   TestError,
   toTextPattern,
   urlMatches,
@@ -127,8 +128,8 @@ export type Cookie = CookieFields &
 export interface BrowserExpectation {
   /** Inverts the matcher. */
   readonly not: BrowserExpectation;
-  /** Waits for the current URL to match. */
-  toHaveURL(expected: string | RegExp, options?: { timeout?: number }): Promise<void>;
+  /** Waits for the current URL to match; `ignoreCase` compares a string case-insensitively and adds the `i` flag to a RegExp, `false` removes it. */
+  toHaveURL(expected: string | RegExp, options?: { ignoreCase?: boolean; timeout?: number }): Promise<void>;
   /** Waits for the current title to match. */
   toHaveTitle(expected: TextMatch, options?: { timeout?: number }): Promise<void>;
   /** Waits for the target's `class` attribute to match: a string is the whole normalized class list, a RegExp is tested against it. */
@@ -601,17 +602,23 @@ function createBrowserExpectation(deps: ExpectationDeps, negated = false): Brows
       return createBrowserExpectation(deps, !negated);
     },
     toHaveURL(expected, options) {
+      rejectUnknownOptions('expect.toHaveURL', options, ['ignoreCase', 'timeout']);
+      const ignoreCase = options?.ignoreCase;
+      if (ignoreCase !== undefined && typeof ignoreCase !== 'boolean') {
+        throw new TestError('INVALID_ARGUMENT', `expect.toHaveURL option "ignoreCase" must be a boolean, got ${typeof ignoreCase}`);
+      }
       const label = typeof expected === 'string' ? expected : String(expected);
       const target = deps.baseHref();
       return poll(
         'toHaveURL',
-        `URL ${label}`,
-        async () => urlMatches(await deps.currentUrl(), expected, target),
+        `URL ${label}${ignoreCase === true ? ' ignoring case' : ''}`,
+        async () => urlMatches(await deps.currentUrl(), expected, target, ignoreCase),
         async () => `URL ${await deps.currentUrl()}`,
         options?.timeout,
       );
     },
     toHaveTitle(expected, options) {
+      rejectUnknownOptions('expect.toHaveTitle', options, ['timeout']);
       const pattern = toTextPattern(expected, { exact: true });
       return poll(
         'toHaveTitle',
@@ -622,6 +629,7 @@ function createBrowserExpectation(deps: ExpectationDeps, negated = false): Brows
       );
     },
     toHaveClass(target, expected, options) {
+      rejectUnknownOptions('expect.toHaveClass', options, ['timeout']);
       const pattern = toTextPattern(expected, { exact: true });
       return poll(
         'toHaveClass',

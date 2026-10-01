@@ -179,7 +179,7 @@ what to do today.
 | `toBeEmpty()`, `toBeInViewport()`, `toBeEditable()`, `toHaveRole()`, `toHaveAccessibleDescription()` | not yet | missing |
 | `expect(locator).toHaveClass(cls)` | `expect(browser).toHaveClass(locator, cls)`; a DOM fact is asserted through `browser`; reads the `class` attribute, so `''` matches `class=""` and not a missing attribute | web only |
 | `toHaveCSS()`, `toHaveId()`, `toHaveJSProperty()`, `toContainClass()`, `toHaveValues()` | not yet; `browser.evaluate` plus a value matcher | missing |
-| `expect(page).toHaveURL()`, `toHaveTitle()` | `expect(browser).toHaveURL()`, `toHaveTitle()` | web only |
+| `expect(page).toHaveURL()`, `toHaveTitle()` | `expect(browser).toHaveURL()`, `toHaveTitle()`; `toHaveURL` takes `ignoreCase` | web only |
 | `toHaveScreenshot()`, `toMatchSnapshot()` | not yet; `agent.assert('...', { vision: true })` is a judgment, not a pixel diff | missing |
 | `toMatchAriaSnapshot()` | not yet | missing |
 | `expect(value).toBe()`, `toEqual()`, `toMatch()`, `toBeTruthy()`, `toBeCloseTo()` and the rest | the same, see [value matchers](/reference/expect#value-matchers) | same |

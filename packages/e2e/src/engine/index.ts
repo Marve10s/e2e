@@ -27,9 +27,10 @@ import { engineBrand } from '../internal/brands.ts';
 // reproduce exactly, exported so an engine never carries its own copy: the
 // runner error taxonomy, text-pattern matching, locator resolution over a
 // semantic tree, URL matching, assertion polling, and the JSON-value rules
-// for data a fixture returns, and the unknown-key check config options get.
+// for data a fixture returns, and the unknown-key checks config objects and
+// option bags get.
 export { ConfigurationError, InfrastructureError, TestError } from '../internal/errors.ts';
-export { rejectUnknownKeys } from '../internal/options.ts';
+export { rejectUnknownKeys, rejectUnknownOptions } from '../internal/options.ts';
 export { validateJsonValue, type JsonValueRules } from '../internal/json-value.ts';
 export { describePattern, matchesText, toTextPattern } from '../internal/text.ts';
 export { resolveExpression, type ResolveExpressionOptions } from './resolve.ts';

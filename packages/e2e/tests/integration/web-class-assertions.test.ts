@@ -3,7 +3,8 @@
  * loads it: from a config file, so the engine's `e2e/engine` and the runner's
  * core are two module copies and `instanceof` cannot tell a runner error apart.
  * A node that is not there yet must keep the matcher polling; an ambiguous
- * locator must still fail at once.
+ * locator must still fail at once. The browser matchers take Playwright's
+ * `ignoreCase` on `toHaveURL` and refuse an option they do not take.
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -37,6 +38,28 @@ test('an empty class attribute is an empty class list', async ({ app, browser })
 test('a missing class attribute is not an empty class list', async ({ app, browser, screen }) => {
   await app.open('/classes');
   await expect(browser).toHaveClass(screen.getByTestId('items'), '', { timeout: 300 });
+});
+
+test('toHaveURL ignoreCase folds the comparison', async ({ app, browser }) => {
+  await app.open('/classes');
+  await expect(browser).toHaveURL('/CLASSES', { ignoreCase: true });
+  await expect(browser).toHaveURL(/CLASSES$/, { ignoreCase: true });
+  await expect(browser).not.toHaveURL('/CLASSES', { timeout: 300 });
+});
+
+test('a negated toHaveURL ignoreCase fails on a case-folded match', async ({ app, browser }) => {
+  await app.open('/classes');
+  await expect(browser).not.toHaveURL('/CLASSES', { ignoreCase: true, timeout: 300 });
+});
+
+test('toHaveTitle refuses ignoreCase', async ({ app, browser }) => {
+  await app.open('/classes');
+  await expect(browser).toHaveTitle('CLASSES', { ignoreCase: true } as never);
+});
+
+test('toHaveClass refuses an unknown option', async ({ app, browser }) => {
+  await app.open('/classes');
+  await expect(browser).toHaveClass(browser.locator('#blank-card'), '', { signal: AbortSignal.timeout(1000) } as never);
 });
 `;
 
@@ -79,5 +102,26 @@ describe('web class assertions', () => {
     expect(missing.status).toBe('failed');
     expect(missing.attempts[0]!.error?.code).toBe('ASSERTION_FAILED');
     expect(missing.attempts[0]!.error?.message).toContain('observed: no class attribute');
+  });
+
+  it('honors ignoreCase on toHaveURL, negated too', () => {
+    const folded = resultByTitle(outcome, 'toHaveURL ignoreCase folds the comparison');
+    expect(folded.status, JSON.stringify(folded.attempts[0]?.error)).toBe('passed');
+    const negated = resultByTitle(outcome, 'a negated toHaveURL ignoreCase fails on a case-folded match');
+    expect(negated.status).toBe('failed');
+    expect(negated.attempts[0]!.error?.code).toBe('ASSERTION_FAILED');
+    expect(negated.attempts[0]!.error?.message).toContain('expected: not URL /CLASSES ignoring case');
+  });
+
+  it('refuses an option a browser matcher does not take before polling', () => {
+    for (const [title, message] of [
+      ['toHaveTitle refuses ignoreCase', 'expect.toHaveTitle options has no key "ignoreCase"; it takes timeout'],
+      ['toHaveClass refuses an unknown option', 'expect.toHaveClass options has no key "signal"; it takes timeout'],
+    ] as const) {
+      const result = resultByTitle(outcome, title);
+      expect(result.status, title).toBe('failed');
+      expect(result.attempts[0]!.error?.code, title).toBe('INVALID_ARGUMENT');
+      expect(result.attempts[0]!.error?.message, title).toContain(message);
+    }
   });
 });

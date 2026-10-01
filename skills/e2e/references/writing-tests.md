@@ -264,8 +264,8 @@ a match, hidden or not; `toHaveClass` compares the whole normalized class
 list or tests a RegExp. `toBeVisible({ visible: false })`, `toBeAttached({
 attached: false })`, `toBeEnabled({ enabled: false })`, and `toBeChecked({
 checked: false })` wait for the opposite state; `ignoreCase` works on
-`toHaveText`, `toContainText`, `toHaveAccessibleName`, and
-`toHaveAttribute(name, value)`. Any other option key is `INVALID_ARGUMENT`.
+`toHaveText`, `toContainText`, `toHaveAccessibleName`,
+`toHaveAttribute(name, value)`, and `toHaveURL`. Any other option key is `INVALID_ARGUMENT`.
 A failed matcher is `ASSERTION_FAILED`, exit code 1.
 
 ## Sign-in sessions

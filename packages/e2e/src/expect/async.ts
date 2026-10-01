@@ -2,7 +2,7 @@
 
 import type { SemanticNode } from '../engine/surface.ts';
 import { TestError } from '../internal/errors.ts';
-import { rejectUnknownOptions } from '../internal/options.ts';
+import { isPlainObject, rejectUnknownOptions } from '../internal/options.ts';
 import {
   isTextMatch,
   normalizeText,
@@ -467,7 +467,7 @@ function visibilitySpec(name: string, visible: boolean): MatcherSpec {
 
 /** The boolean option `key` of a matcher's options, undefined when absent; anything but a boolean is `INVALID_ARGUMENT`. */
 function booleanOption(api: string, options: object | undefined, key: string): boolean | undefined {
-  const value: unknown = options === undefined ? undefined : (options as Record<string, unknown>)[key];
+  const value = isPlainObject(options) ? options[key] : undefined;
   if (value === undefined || typeof value === 'boolean') return value;
   throw new TestError('INVALID_ARGUMENT', `${api} option "${key}" must be a boolean, got ${typeof value}`);
 }
