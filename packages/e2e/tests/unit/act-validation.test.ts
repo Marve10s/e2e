@@ -73,4 +73,14 @@ describe('redactParams', () => {
       'account <secret:probe>': { name: '{{param:/account <secret:probe>/name}}', tags: ['<secret:probe>', 7] },
     });
   });
+
+  it('refuses two keys that redact alike instead of dropping one', () => {
+    const { projected, templates } = validateParams({ nested: { [`id ${SECRET}`]: 1, 'id <secret:probe>': 2 } });
+    expect(() => redactParams(projected!, templates, redact)).toThrow(
+      expect.objectContaining({
+        code: 'INVALID_ARGUMENT',
+        message: 'agent.act params has two keys that read "id <secret:probe>" once secret values are redacted; a key cannot be told apart by a secret',
+      }),
+    );
+  });
 });

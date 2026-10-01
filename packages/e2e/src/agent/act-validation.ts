@@ -145,7 +145,8 @@ export function redactParams(
 /**
  * `value` with `redact` applied to every string in it, object keys included.
  * Records in `pointers` where each node's pointer (`at.from`) lands once its
- * keys are redacted (`at.to`).
+ * keys are redacted (`at.to`). Two keys of one object that redact alike would
+ * leave one value standing for both, so that is `INVALID_ARGUMENT`.
  */
 function redactJson(
   value: JsonValue,
@@ -161,12 +162,18 @@ function redactJson(
     );
   }
   if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => {
-      const clean = redact(key);
-      return [clean, redactJson(entry, redact, { from: paramPointer(at.from, key), to: paramPointer(at.to, clean) }, pointers)];
-    }),
-  );
+  const out: Record<string, JsonValue> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const clean = redact(key);
+    if (Object.hasOwn(out, clean)) {
+      throw new TestError(
+        'INVALID_ARGUMENT',
+        `agent.act params has two keys that read ${JSON.stringify(clean)} once secret values are redacted; a key cannot be told apart by a secret`,
+      );
+    }
+    out[clean] = redactJson(entry, redact, { from: paramPointer(at.from, key), to: paramPointer(at.to, clean) }, pointers);
+  }
+  return out;
 }
 
 /** The marked leaves one walk of the params found. */

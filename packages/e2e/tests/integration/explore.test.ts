@@ -248,6 +248,20 @@ describe('e2e explore', () => {
     expect(fakeCalls[0]!.system).toContain('Exploration goal: Explore the home page with key <secret:probe>');
     expect(JSON.stringify([outcome.report, fakeCalls])).not.toContain(value);
     expect(readFileSync(path.join(project.dir, '.e2e', 'report.json'), 'utf8')).not.toContain(value);
+
+    // A goal at the ceiling that the markers push past it is refused before anything starts.
+    const long = `${'a'.repeat(2_000 - value.length - 1)} ${value}`;
+    await expect(
+      explore({
+        cwd: project.dir,
+        rawConfig: {
+          targets: [{ name: 'web', engine: web(), app: { url: app.url } }] as never,
+          agents: { default: { model } },
+          secrets: { 'a-long-secret-name': value },
+        },
+        goal: long,
+      }),
+    ).rejects.toThrow('the goal must be at most 2000 characters with its secret values redacted, got 2009');
   }, 120_000);
 
   it('says to pass --trace on and --video on when a retry mode would record nothing, explore running once', async () => {
