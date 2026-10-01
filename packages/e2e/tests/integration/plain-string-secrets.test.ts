@@ -143,7 +143,7 @@ describe('a secret value passed as a plain string', () => {
     for (const [file, text] of contentsUnder(root)) {
       if (!file.includes('.zip!')) expect(text.includes(SECRET), file).toBe(false);
     }
-    expect(readFileSync(path.join(root, 'junit.xml'), 'utf8')).toContain(`title holds ${MARKER.replace('<', '&lt;').replace('>', '&gt;')}`);
+    expect(readFileSync(path.join(root, 'junit.xml'), 'utf8')).toContain('title holds &lt;secret:probe&gt;');
   });
 });
 
