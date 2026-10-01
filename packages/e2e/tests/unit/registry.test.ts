@@ -363,6 +363,32 @@ describe('collectFromRegistration', () => {
     );
   });
 
+  it('redacts registered secret values in test and describe titles before ids are derived, and detects a collision after', async () => {
+    const value = 'sk_title_9f3Kq2';
+    const redact = (title: string) => title.replaceAll(value, '<secret:probe>');
+    const registration = await collectModule(async () => {
+      test.describe(`suite ${value}`, { serial: true }, () => {
+        test(`holds ${value}`, noop);
+      });
+    }, undefined, redact);
+    const collected = collectFromRegistration('/root', '/root/tests/a.e2e.ts', registration);
+    const [only] = collected.tests;
+    expect(only!.title).toBe('holds <secret:probe>');
+    expect(only!.titlePath).toEqual(['suite <secret:probe>', 'holds <secret:probe>']);
+    expect(only!.group?.title).toBe('suite <secret:probe>');
+    expect(only!.id).toBe('tests/a.e2e.ts::suite%20%3Csecret%3Aprobe%3E::holds%20%3Csecret%3Aprobe%3E');
+    expect(only!.serialId).toBe('serial::tests/a.e2e.ts::suite%20%3Csecret%3Aprobe%3E');
+    expect(JSON.stringify(collected.tests.map(({ fn: _fn, group: _group, serialRoot: _root, ...rest }) => rest))).not.toContain(value);
+
+    const colliding = await collectModule(async () => {
+      test(`token ${value}`, noop);
+      test('token <secret:probe>', noop);
+    }, undefined, redact);
+    expect(() => collectFromRegistration('/root', '/root/tests/b.e2e.ts', colliding)).toThrow(
+      'duplicate title path token <secret:probe> in tests/b.e2e.ts; titles are compared with every registered secret value redacted to its <secret:name> marker',
+    );
+  });
+
   it('marks serial members with the unit source ID', async () => {
     const registration = await collectModule(async () => {
       test.describe('wizard', { serial: true }, () => {

@@ -328,6 +328,10 @@ credentials: {
   `E2E_SECRET_STRIPE_KEY`; `secrets.get('stripe-key')` is the same kind of
   handle, fills any editable input, and is redacted by name everywhere the
   runner writes.
+- A registered value passed as a plain string (`process.env.STRIPE_KEY` in a
+  title, a URL, a locator, an `agent.act` instruction or param) is redacted
+  too: the test id, reports, the executor, and the model all see
+  `<secret:stripe-key>`, so the agent cannot type it. Pass the handle.
 
 ## The browser fixture (browser only)
 

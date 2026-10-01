@@ -337,11 +337,15 @@ export class Invocation {
     for (;;) {
       this.checkDeadline();
       this.consumeModelCall();
-      const prompt = buildPrompt({
-        ...request.prompt,
-        ...(this.treeWithheld ? { withholdTree: true } : {}),
-        ...(repair === undefined ? {} : { repair }),
-      });
+      // The observation is redacted already; the instruction is the test's
+      // own text, which may spell out a registered value.
+      const prompt = this.runtime.redact(
+        buildPrompt({
+          ...request.prompt,
+          ...(this.treeWithheld ? { withholdTree: true } : {}),
+          ...(repair === undefined ? {} : { repair }),
+        }),
+      );
       // Pixels travel with the observation they were captured for, so the
       // image and the tree in one request always describe one revision.
       const images = imagesFor(request.prompt.observation);

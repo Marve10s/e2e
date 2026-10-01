@@ -160,7 +160,7 @@ export function createFixtures(environment: AttemptEnvironment): AttemptFixtures
       // MODEL_UNAVAILABLE it would never hit; a judgment still fails with it
       // on its first call.
       judge: lazily(() => environment.models.build(resolved.judge, name)),
-      agentContext: joinAgentContext(resolved.context, environment.agentContext),
+      agentContext: joinAgentContext(resolved.context, environment.agentContext, ledger.redact),
     };
     selections.set(name, selection);
     return selection;
@@ -358,15 +358,16 @@ function lazyBuiltInAgent(config: ResolvedAgentConfig): StepExecutor {
   };
 }
 
-/** Trusted config context first, then test/group context. */
+/** Trusted config context first, then test/group context, with any registered secret value it spells out redacted: it is model input. */
 function joinAgentContext(
   configContext: string | undefined,
   testContext: string | undefined,
+  redact: (text: string) => string,
 ): string | undefined {
   const parts = [configContext, testContext].filter(
     (part): part is string => part !== undefined && part.trim() !== '',
   );
-  return parts.length === 0 ? undefined : parts.join('\n');
+  return parts.length === 0 ? undefined : redact(parts.join('\n'));
 }
 
 /** Navigation needs an app URL: the target's `app.url`. */

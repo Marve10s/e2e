@@ -8,6 +8,7 @@ import { setupTestId, testId } from '../internal/ids.ts';
 import { explainModuleError } from '../config/diagnose.ts';
 import { importModule } from '../config/load.ts';
 import type { ResolvedConfig } from '../config/resolve.ts';
+import { staticSecretLedger } from '../run/secrecy.ts';
 import {
   collectModule,
   groupTitles,
@@ -198,8 +199,9 @@ function toCollectedTests(
   return registration.tests.map((registered) => {
     const encoded = testId(file, registered.titlePath);
     if (seenTitlePaths.has(encoded)) {
+      const redacted = registered.titlePath.some((title) => title.includes('<secret:'));
       throw new CollectionError(
-        `duplicate title path ${registered.titlePath.join(' > ')} in ${file}`,
+        `duplicate title path ${registered.titlePath.join(' > ')} in ${file}${redacted ? '; titles are compared with every registered secret value redacted to its <secret:name> marker' : ''}`,
       );
     }
     seenTitlePaths.add(encoded);
@@ -505,12 +507,13 @@ async function collectFiles(
 ): Promise<{ files: CollectedFile[]; uncollected: UncollectedFile[] }> {
   const files: CollectedFile[] = [];
   const uncollected: UncollectedFile[] = [];
+  const { redact } = staticSecretLedger(config.allSecrets);
   for (const file of discovered) {
     const absolutePath = path.join(config.projectRoot, file);
     const skippable = narrowed && !isSelected(file);
     let registration: ModuleRegistration;
     try {
-      registration = await collectModule(() => importModule(absolutePath, 'collect'), absolutePath);
+      registration = await collectModule(() => importModule(absolutePath, 'collect'), absolutePath, redact);
     } catch (cause) {
       if (skippable) {
         uncollected.push({ file, reason: cause instanceof CollectionError ? cause.message : explainModuleError(cause, absolutePath) });
