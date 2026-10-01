@@ -74,6 +74,13 @@ describe('redactParams', () => {
     });
   });
 
+  it('keeps a __proto__ key as an own property', () => {
+    const { projected, templates } = validateParams(JSON.parse(`{"__proto__":"${SECRET}","note":"x"}`) as Record<string, string>);
+    const redacted = redactParams(projected!, templates, redact);
+    expect(Object.hasOwn(redacted.params, '__proto__')).toBe(true);
+    expect(JSON.stringify(redacted.params)).toBe('{"__proto__":"<secret:probe>","note":"x"}');
+  });
+
   it('refuses two keys that redact alike instead of dropping one', () => {
     const { projected, templates } = validateParams({ nested: { [`id ${SECRET}`]: 1, 'id <secret:probe>': 2 } });
     expect(() => redactParams(projected!, templates, redact)).toThrow(

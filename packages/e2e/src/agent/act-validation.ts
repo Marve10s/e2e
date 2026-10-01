@@ -171,7 +171,13 @@ function redactJson(
         `agent.act params has two keys that read ${JSON.stringify(clean)} once secret values are redacted; a key cannot be told apart by a secret`,
       );
     }
-    out[clean] = redactJson(entry, redact, { from: paramPointer(at.from, key), to: paramPointer(at.to, clean) }, pointers);
+    // Defined, not assigned, so a `__proto__` key stays an own property.
+    Object.defineProperty(out, clean, {
+      value: redactJson(entry, redact, { from: paramPointer(at.from, key), to: paramPointer(at.to, clean) }, pointers),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return out;
 }
