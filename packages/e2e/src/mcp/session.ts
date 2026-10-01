@@ -241,7 +241,7 @@ export class SessionHost {
         screen,
         session: attempt.session,
         tools: config.agent.tools,
-        redact: attempt.agentRuntime.redact,
+        redaction: { redact: attempt.agentRuntime.redact, redactCut: attempt.agentRuntime.redactCut },
         recorder,
         locator: new LocatorEngine({
           session: attempt.session,
