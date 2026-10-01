@@ -1,5 +1,13 @@
 # e2e
 
+## 0.15.2
+
+### Patch Changes
+
+- [#735](https://github.com/tester-army/e2e/pull/735) [`28b09f3`](https://github.com/tester-army/e2e/commit/28b09f3c1954d62ea14ee53fb280a9ff7da6297b) Thanks [@okwasniewski](https://github.com/okwasniewski)! - `e2e init` adds `zod` next to `ai` when it sets up a model gateway. `zod` is a peer of `ai` and every provider package; npm and pnpm install peers on their own, Yarn does not, so a Yarn project failed to load the generated config with `CONFIG_LOAD_FAILED`. A Yarn project scaffolded with a model gateway before this fix needs `yarn add -D zod`.
+
+- [#708](https://github.com/tester-army/e2e/pull/708) [`4ee772c`](https://github.com/tester-army/e2e/commit/4ee772cc4ab800b1f2d4be4723bf28e2909b1edc) Thanks [@okwasniewski](https://github.com/okwasniewski)! - The package ships the documentation pages: coding agents can read them offline from `node_modules/e2e/docs`.
+
 ## 0.15.1
 
 ### Patch Changes
