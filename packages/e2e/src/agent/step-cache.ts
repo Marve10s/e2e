@@ -369,7 +369,7 @@ export class StepTraceSession {
     // on the recorded end route has been seen.
     const screens: ObservedScreen[] = start === undefined ? [] : [start];
     const onEndRoute = (screen: ObservedScreen | undefined) =>
-      screen !== undefined && (trace.endPath === undefined || screen.path === undefined || sameRoute(screen.path, trace.endPath));
+      screen !== undefined && (trace.endPath === undefined || (screen.path !== undefined && sameRoute(screen.path, trace.endPath)));
     const host = this.host;
     const watched: ReplayHost = {
       get traceEligible() {
@@ -423,7 +423,12 @@ export class StepTraceSession {
     if (arrived === undefined) return false;
     const baseline = baselineScreen(screens, arrived.path);
     if (!deltaEvidenced(trace, baseline?.nodes, inputTargets(trace), this.options)) return false;
-    return (await verifyEndState(this.host, (nodes) => deltaHolds(trace, nodes, (baseline ?? start).nodes, this.options), {
+    // Every look the wait takes must still be on the recorded end route: a
+    // screen that moved on after the route first matched is another screen.
+    const holds = (screen: SemanticScreen) =>
+      (trace.endPath === undefined || screen.path === undefined || sameRoute(screen.path, trace.endPath)) &&
+      deltaHolds(trace, screen.nodes, (baseline ?? start).nodes, this.options);
+    return (await verifyEndState(this.host, holds, {
       initial: arrived,
       ...(trace.endWaitMs === undefined ? {} : { waitMs: trace.endWaitMs }),
     })) && this.host.traceEligible;
