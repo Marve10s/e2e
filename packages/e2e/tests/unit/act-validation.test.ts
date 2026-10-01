@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateActOptions } from '../../src/agent/act-validation.ts';
+import { redactParams, validateActOptions, validateParams } from '../../src/agent/act-validation.ts';
+import { templateParams } from '../../src/cache/template.ts';
+import { unique } from '../../src/params.ts';
 import { ConfigurationError, TestError } from '../../src/internal/errors.ts';
 
 describe('validateActOptions', () => {
@@ -47,5 +49,28 @@ describe('validateActOptions', () => {
       );
     }
     expect(() => validateActOptions({ vision: true } as never, 0)).toThrow(ConfigurationError);
+  });
+});
+
+describe('redactParams', () => {
+  const SECRET = 'sk_param_4Rt9Zq';
+  const redact = (text: string) => text.replaceAll(SECRET, '<secret:probe>');
+
+  it('redacts keys and leaves and moves unique() templates with their leaves, so the cache key slots them', () => {
+    const { projected, templates } = validateParams({
+      note: SECRET,
+      [`account ${SECRET}`]: { name: unique(`E2E ${SECRET} 42`), tags: [SECRET, 7] },
+    });
+    expect(templates).toEqual([{ pointer: `/account ${SECRET}/name`, value: `E2E ${SECRET} 42` }]);
+    const redacted = redactParams(projected!, templates, redact);
+    expect(redacted.params).toEqual({
+      note: '<secret:probe>',
+      'account <secret:probe>': { name: 'E2E <secret:probe> 42', tags: ['<secret:probe>', 7] },
+    });
+    expect(redacted.templates).toEqual([{ pointer: '/account <secret:probe>/name', value: 'E2E <secret:probe> 42' }]);
+    expect(templateParams(redacted.params, redacted.templates)).toEqual({
+      note: '<secret:probe>',
+      'account <secret:probe>': { name: '{{param:/account <secret:probe>/name}}', tags: ['<secret:probe>', 7] },
+    });
   });
 });

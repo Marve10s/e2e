@@ -224,6 +224,32 @@ describe('e2e explore', () => {
     expect((outcome as unknown as { notices: string[] }).notices).toEqual([]);
   }, 120_000);
 
+  it('redacts a registered secret value the goal spells out from the title, artifact names, report, and model input', async () => {
+    const value = 'goal-Secret-5Tq8Wz';
+    const goal = `Explore the home page with key ${value}`;
+    const model = installExploreModel({
+      plan: () => ({ decision: 'finish', summary: 'Nothing to report.' }),
+      loop: () => [{ toolName: 'complete_step', input: { status: 'passed', summary: 'Looked' } }],
+    });
+    const outcome = await explore({
+      cwd: project.dir,
+      rawConfig: {
+        targets: [{ name: 'web', engine: web(), app: { url: app.url } }] as never,
+        agents: { default: { model } },
+        secrets: { probe: value },
+      },
+      goal,
+      maxSteps: 1,
+      timeoutMs: 180_000,
+    });
+    const result = outcome.report.run.results[0]!;
+    expect(result.titlePath).toEqual(['Explore the home page with key <secret:probe>']);
+    expect(outcome.report.run.explore!.goal).toBe('Explore the home page with key <secret:probe>');
+    expect(fakeCalls[0]!.system).toContain('Exploration goal: Explore the home page with key <secret:probe>');
+    expect(JSON.stringify([outcome.report, fakeCalls])).not.toContain(value);
+    expect(readFileSync(path.join(project.dir, '.e2e', 'report.json'), 'utf8')).not.toContain(value);
+  }, 120_000);
+
   it('says to pass --trace on and --video on when a retry mode would record nothing, explore running once', async () => {
     const model = installExploreModel({
       plan: () => ({ decision: 'finish', summary: 'Nothing here.' }),

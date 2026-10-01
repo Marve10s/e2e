@@ -19,6 +19,7 @@ import type { ReportExplore } from '../report/build.ts';
 import { labelSegment } from '../run/artifacts.ts';
 import type { RunEventSink } from '../run/events.ts';
 import { run, type RunOutcome } from '../run/runner.ts';
+import { staticSecretLedger } from '../run/secrecy.ts';
 import type { AgentConfig, BuiltinReporter, E2EConfig, RecordingMode } from '../types.ts';
 import { createExploreBody } from './body.ts';
 import { explorerAgent, withFindingTool } from './executor.ts';
@@ -120,7 +121,10 @@ export async function explore(options: ExploreOptions = {}): Promise<ExploreOutc
   const agentName = resolved.agentNames[0]!;
   if (agentName !== 'default') notice(`exploring with agent "${agentName}"`);
 
-  const state = new ExploreState(goal, budgets);
+  // The goal becomes the test's title, its artifact directory, the report's
+  // goal, and model input, so a secret it spells out is redacted once, here,
+  // as a test file's titles are at collection.
+  const state = new ExploreState(staticSecretLedger(resolved.allSecrets).redact(goal), budgets);
   const explorer = explorerAgent({ state, agentName, entry: raw.agents?.[agentName], resolved: resolved.agent, notice });
   const resolvedExplorer = resolveAgentConfig(exploreAgentConfig(explorer), `agents.${agentName}`);
   // Every exploration step calls the model, a custom executor's included,

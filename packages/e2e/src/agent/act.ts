@@ -24,7 +24,7 @@ import { ConfigurationError } from '../internal/errors.ts';
 import { withAbort, withTimeout } from '../internal/time.ts';
 import type { ActOptions, ActResult, AgentErrorCode, JsonValue, ModelInstance, Secret } from '../types.ts';
 import { AgentError, CATEGORY_BY_CODE, isAgentError, toAgentError } from './error.ts';
-import { validateActOptions, validateInstruction, validateParams, validateVerdict } from './act-validation.ts';
+import { redactParams, validateActOptions, validateInstruction, validateParams, validateVerdict } from './act-validation.ts';
 import { ActionDispatcher } from './action-dispatcher.ts';
 import { resolveBoundedBudget, resolveTimeout } from './call-options.ts';
 import { RUNTIME_CODES, type ExecutorPixels, type StepExecutorContext, type StepVerdict } from './executor.ts';
@@ -175,16 +175,8 @@ export async function dispatchAgentStep(
  */
 function redactSpec(spec: DispatchSpec, redact: (text: string) => string): DispatchSpec {
   const instruction = redact(spec.instruction);
-  const params = spec.params === undefined ? undefined : (redactJson(spec.params, redact) as Readonly<Record<string, JsonValue>>);
-  return { ...spec, instruction, params };
-}
-
-/** `value` with `redact` applied to every string in it, object keys included. */
-function redactJson(value: JsonValue, redact: (text: string) => string): JsonValue {
-  if (typeof value === 'string') return redact(value);
-  if (Array.isArray(value)) return value.map((entry) => redactJson(entry, redact));
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [redact(key), redactJson(entry, redact)]));
+  if (spec.params === undefined) return { ...spec, instruction };
+  return { ...spec, instruction, ...redactParams(spec.params, spec.templates, redact) };
 }
 
 /** One step's wiring: the collaborators, the executor's context, and the verdict mapping. */

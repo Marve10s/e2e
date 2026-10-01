@@ -133,7 +133,8 @@ and the trace text of a session a secret was filled on or an engine option
 holds. That includes a value the test passes as a plain string rather than
 a `secrets.get()` handle: test and `describe` titles, step labels (an
 `app.open` URL, a locator's text), an `agent.act` or `agent.assert`
-instruction and the strings in its params, and `agentContext`. Titles are
+instruction and the strings in its params, `agentContext`, and an
+`e2e explore` goal. Titles are
 redacted as the test file is collected, so the test id, `--grep`, the
 reporters, and the artifact and failure-page file names all see
 `<secret:name>`, and two titles that differ only in a secret value are a

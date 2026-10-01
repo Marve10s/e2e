@@ -207,7 +207,7 @@ class Collector {
       const result = body();
       if (isPromiseLike(result)) {
         throw new CollectionError(
-          `describe body for ${JSON.stringify(title)} must finish synchronously`,
+          `describe body for ${JSON.stringify(group.title)} must finish synchronously`,
         );
       }
     } finally {
