@@ -227,6 +227,7 @@ class ActDispatch {
               ...(agent.executor.version === undefined ? {} : { version: agent.executor.version }),
             },
             redact: runtime.redact,
+            redactCut: runtime.redactCut,
             maxActions: this.accounting.maxActions,
             stepIndex,
           });
