@@ -595,6 +595,28 @@ test('a route handler assertion that no step follows, then a teardown that navig
 });
 `;
 
+// A local file the wrapped schemes would load. Each test navigates once and
+// fails with POLICY_DENIED; a navigation that went through fails differently.
+const WRAPPED_SCHEMES = `import { test } from '@e2e-dev/web';
+const marker = new URL('../marker.txt', import.meta.url).href;
+const leakCheck = async (browser) => {
+  const text = String(await browser.evaluate(() => document.body?.innerText ?? ''));
+  if (text.includes('marker-local-file')) throw new Error('LEAKED');
+};
+for (const url of ['view-source:' + marker, 'VIEW-SOURCE:' + marker, '  view-source:' + marker, 'blob:http://127.0.0.1/x', 'about:blank']) {
+  test('app.open refuses ' + JSON.stringify(url), async ({ app, browser }) => {
+    await app.open();
+    await app.open(url);
+    await leakCheck(browser);
+  });
+}
+test('browser.goto refuses view-source', async ({ app, browser }) => {
+  await app.open();
+  await browser.goto('view-source:' + marker);
+  await leakCheck(browser);
+});
+`;
+
 describe('web platform integration', () => {
   let app: FixtureApp;
   let outcome: RunOutcome;
@@ -603,7 +625,12 @@ describe('web platform integration', () => {
   beforeAll(async () => {
     app = await startFixtureApp();
     ({ outcome, project } = await runProject(
-      { 'tests/kitchen.e2e.ts': KITCHEN_SINK, 'tests/late-handler.e2e.ts': LATE_HANDLER_THEN_TEARDOWN },
+      {
+        'tests/kitchen.e2e.ts': KITCHEN_SINK,
+        'tests/late-handler.e2e.ts': LATE_HANDLER_THEN_TEARDOWN,
+        'tests/schemes.e2e.ts': WRAPPED_SCHEMES,
+        'marker.txt': 'marker-local-file\n',
+      },
       {
         appUrl: app.url,
         config: { actionTimeout: 5_000, assertionTimeout: 4_000, timeout: 30_000 },
@@ -797,6 +824,24 @@ describe('web platform integration', () => {
     const result = resultByTitle(outcome, 'forbidden URL schemes are refused');
     expect(result.status).toBe('failed');
     expect(result.attempts[0]!.error?.code).toBe('POLICY_DENIED');
+  });
+
+  it('denies a wrapped or non-http(s) scheme on app.open and browser.goto before it loads', () => {
+    const titles = [
+      'app.open refuses "view-source:file://',
+      'app.open refuses "VIEW-SOURCE:file://',
+      'app.open refuses "  view-source:file://',
+      'app.open refuses "blob:http://127.0.0.1/x"',
+      'app.open refuses "about:blank"',
+      'browser.goto refuses view-source',
+    ];
+    for (const title of titles) {
+      const result = outcome.results.find((candidate) => candidate.test.title.startsWith(title));
+      expect(result, title).toBeDefined();
+      expect(result!.status, title).toBe('failed');
+      expect(result!.attempts[0]!.error?.code, title).toBe('POLICY_DENIED');
+      expect(result!.attempts[0]!.error?.message, title).toMatch(/^forbidden URL scheme: (view-source|blob|about):$/);
+    }
   });
 
   it('exits with configuration precedence and writes report.json', () => {

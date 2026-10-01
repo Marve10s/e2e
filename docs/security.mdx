@@ -48,7 +48,7 @@ A tool call that breaks a rule fails with `POLICY_DENIED`:
 
 | Denied | Why |
 | --- | --- |
-| Navigation to `file:`, `data:`, or `javascript:` | These URL schemes are forbidden. |
+| Navigation to any scheme but `http:` and `https:` | `file:`, `data:`, `javascript:`, and wrappers such as `view-source:file:` would load local or inline content. |
 | A malformed URL | Nothing is repaired. |
 | A `Secret` reaching a JSON sink | Handles carry no value, and no value may be serialized. |
 | Reading a value, text, or attribute from a secure field, with a getter or a `toHaveValue`, `toHaveText`, `toContainText`, or `toHaveAttribute` matcher | Assert the outcome, not the secret. A withheld value is redacted, not empty or absent. |
@@ -77,10 +77,12 @@ list. Shared hosting domains such as `vercel.app` count as one site, so
 headers can reach other hosts under that domain. `basicAuth` is broader:
 it answers a `401` challenge from any origin.
 
-The runner checks forbidden schemes on explicit navigation: `app.open`, the
-agent's `navigate` verb, and `device.openLink`. `device.openApp` and the
-`open_app` tool take an app id and refuse a link, since the device would
-open one as a URL. The runner does not re-check redirects or attach to popup
+The runner checks the scheme on explicit navigation. `app.open`,
+`browser.goto`, and the agent's `navigate` verb admit `http:` and `https:`
+only. A device link may use an app's custom scheme, so `device.openLink`
+refuses a list instead: `file:`, `data:`, `javascript:`, `view-source:`,
+`blob:`, and `filesystem:`. `device.openApp` and the `open_app` tool take an
+app id and refuse a link, since the device would open one as a URL. The runner does not re-check redirects or attach to popup
 pages. Register `browser.onDialog` to handle browser dialogs.
 
 ## Secrets

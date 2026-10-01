@@ -120,8 +120,8 @@ assertions for visible UI so tests depend less on the DOM structure.
 await browser.setCookies([{ url: 'http://localhost:3000', name: 'tz', value: 'UTC' }]);
 ```
 
-A cookie URL that does not parse, or uses `file:`, `data:`, or
-`javascript:`, is `POLICY_DENIED`; a domain cookie is checked as the origin
+A cookie URL that does not parse, or uses a scheme other than `http:` or
+`https:`, is `POLICY_DENIED`; a domain cookie is checked as the origin
 it would be sent to. If any entry is refused, no cookies are set. To resize
 the page, see [Testing viewports](/viewports).
 

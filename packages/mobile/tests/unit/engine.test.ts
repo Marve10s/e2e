@@ -1511,7 +1511,7 @@ describe('device fixture', () => {
     await openAttempt(h);
     const device = fixture(h);
     const before = h.fake.calls.length;
-    for (const denied of ['file:///etc/passwd', 'data:text/html,hi', 'javascript:alert(1)']) {
+    for (const denied of ['file:///etc/passwd', 'data:text/html,hi', 'javascript:alert(1)', 'view-source:file:///etc/passwd']) {
       await expect(device.openLink(denied)).rejects.toMatchObject({ code: 'POLICY_DENIED' });
     }
     for (const malformed of ['orders/42', '', 'https://']) {
@@ -1525,7 +1525,7 @@ describe('device fixture', () => {
     await openAttempt(h);
     const device = fixture(h);
     const before = h.fake.calls.length;
-    for (const denied of ['file:///etc/passwd', 'data:text/html,hi', 'javascript:alert(1)']) {
+    for (const denied of ['file:///etc/passwd', 'data:text/html,hi', 'javascript:alert(1)', 'view-source:file:///etc/passwd']) {
       await expect(device.openApp(denied)).rejects.toMatchObject({ code: 'POLICY_DENIED' });
     }
     for (const link of ['https://example.com/verify', 'myapp://orders/42']) {

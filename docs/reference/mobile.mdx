@@ -269,8 +269,8 @@ export interface Device {
    * `relaunch` restarts it fresh. `launchArguments` and `permissions` apply
    * to this launch alone; the target's configured ones apply to a `relaunch`
    * of the pinned app, and to no foreground-only open. A link is
-   * `INVALID_ARGUMENT` (`file:`, `data:`, and `javascript:` are
-   * `POLICY_DENIED`): `openLink` opens one.
+   * `INVALID_ARGUMENT` (`file:`, `data:`, `javascript:`, `view-source:`,
+   * `blob:`, and `filesystem:` are `POLICY_DENIED`): `openLink` opens one.
    */
   openApp(app: string, options?: OpenAppOptions): Promise<void>;
   /**
@@ -280,8 +280,8 @@ export interface Device {
    * a web link the app does not claim goes to Safari, and the next
    * observation brings the app back. Android starts the link on that
    * package. Without an app, Android lets the OS route the link; iOS needs
-   * one (`INVALID_ARGUMENT` without). `file:`, `data:`, and `javascript:`
-   * links are `POLICY_DENIED`.
+   * one (`INVALID_ARGUMENT` without). `file:`, `data:`, `javascript:`,
+   * `view-source:`, `blob:`, and `filesystem:` links are `POLICY_DENIED`.
    */
   openLink(url: string, options?: { app?: string }): Promise<void>;
   /**
@@ -432,9 +432,9 @@ name (`Settings`); `relaunch: true` restarts it fresh, and `launchArguments`
 and `permissions` apply to that launch alone (the target's own apply to a
 `relaunch` of the pinned app). It takes no link:
 agent-device opens any `scheme:rest` string as a URL, so a link is refused
-before the device sees it. A `file:`, `data:`, or `javascript:` link is
-`POLICY_DENIED`, the rule every navigation follows; any other link is
-`INVALID_ARGUMENT` pointing at `openLink`.
+before the device sees it. A `file:`, `data:`, `javascript:`,
+`view-source:`, `blob:`, or `filesystem:` link is `POLICY_DENIED`; any other
+link is `INVALID_ARGUMENT` pointing at `openLink`.
 
 `openLink` opens a deep link or a web link into `app` (default: the pinned
 app), for magic-link sign-in and deep-link routes, and the session observes
@@ -444,8 +444,10 @@ observation brings the app back. Android starts the link on that package.
 Without an app, Android lets the OS route the link, to a verified app link
 owner or the browser, and the session follows the package that took it. iOS
 needs an app: an open bound to none leaves no app session to observe, so it
-is `INVALID_ARGUMENT`. `file:`, `data:`, and `javascript:` links are
-`POLICY_DENIED`, as on the web. The report shows the link cut before its
+is `INVALID_ARGUMENT`. `file:`, `data:`, `javascript:`, `view-source:`,
+`blob:`, and `filesystem:` links are `POLICY_DENIED`. A device link may use
+any app's custom scheme, so the rule refuses these schemes rather than
+admitting http(s) alone as the web does. The report shows the link cut before its
 query and fragment, where a magic link carries its token. The replay cache
 anchors on the location the link lands on: a step recorded after `openLink`
 replays when the link lands on the same screen again.

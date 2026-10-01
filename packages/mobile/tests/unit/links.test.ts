@@ -7,6 +7,23 @@ describe('links', () => {
     expect(linkTarget('HTTPS://Example.com/verify').href).toBe('https://example.com/verify');
   });
 
+  it('refuses schemes that read local content or wrap a URL that does, in any case or padding', () => {
+    for (const denied of [
+      'file:///etc/passwd',
+      'data:text/html,hi',
+      'javascript:alert(1)',
+      'view-source:file:///etc/passwd',
+      'VIEW-SOURCE:file:///etc/passwd',
+      ' view-source:https://example.com/',
+      'view-\tsource:file:///etc/passwd',
+      'blob:https://example.com/0b7c4c1e',
+      'filesystem:https://example.com/temporary/x',
+    ]) {
+      expect(() => linkTarget(denied), denied).toThrowError(expect.objectContaining({ code: 'POLICY_DENIED' }));
+      expect(() => assertAppId(denied.replace(/\s/g, '')), denied).toThrowError(expect.objectContaining({ code: 'POLICY_DENIED' }));
+    }
+  });
+
   it('lets an app id through to openApp and refuses a link, forbidden schemes first', () => {
     for (const app of ['Settings', 'com.apple.Preferences', 'com.android.settings', 'Notes: Pro', ' Clock ']) {
       expect(() => assertAppId(app)).not.toThrow();
