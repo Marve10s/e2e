@@ -603,13 +603,19 @@ const leakCheck = async (browser) => {
   const text = String(await browser.evaluate(() => document.body?.innerText ?? ''));
   if (text.includes('marker-local-file')) throw new Error('LEAKED');
 };
-for (const url of ['view-source:' + marker, 'VIEW-SOURCE:' + marker, '  view-source:' + marker, 'blob:http://127.0.0.1/x', 'about:blank']) {
+for (const url of ['view-source:' + marker, 'VIEW-SOURCE:' + marker, '  view-source:' + marker, 'blob:http://127.0.0.1/x', 'about:srcdoc']) {
   test('app.open refuses ' + JSON.stringify(url), async ({ app, browser }) => {
     await app.open();
     await app.open(url);
     await leakCheck(browser);
   });
 }
+test('app.open and browser.goto admit about:blank', async ({ app, browser }) => {
+  await app.open();
+  await app.open('about:blank');
+  await browser.goto('about:blank');
+  if ((await browser.url()) !== 'about:blank') throw new Error('not blank: ' + (await browser.url()));
+});
 test('browser.goto refuses view-source', async ({ app, browser }) => {
   await app.open();
   await browser.goto('view-source:' + marker);
@@ -832,7 +838,7 @@ describe('web platform integration', () => {
       'app.open refuses "VIEW-SOURCE:file://',
       'app.open refuses "  view-source:file://',
       'app.open refuses "blob:http://127.0.0.1/x"',
-      'app.open refuses "about:blank"',
+      'app.open refuses "about:srcdoc"',
       'browser.goto refuses view-source',
     ];
     for (const title of titles) {
@@ -842,6 +848,7 @@ describe('web platform integration', () => {
       expect(result!.attempts[0]!.error?.code, title).toBe('POLICY_DENIED');
       expect(result!.attempts[0]!.error?.message, title).toMatch(/^forbidden URL scheme: (view-source|blob|about):$/);
     }
+    expect(resultByTitle(outcome, 'app.open and browser.goto admit about:blank').status).toBe('passed');
   });
 
   it('exits with configuration precedence and writes report.json', () => {

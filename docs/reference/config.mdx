@@ -267,8 +267,8 @@ it (no `app.command`) is `INVALID_CONFIG`. An `app.command` with neither
 
 ### The app's site
 
-A test or the agent may open any http(s) URL; every other scheme
-(`file:`, `data:`, `javascript:`, `view-source:`, `blob:`, `about:`) is
+A test or the agent may open any http(s) URL, and `about:blank`; every
+other scheme (`file:`, `data:`, `javascript:`, `view-source:`, `blob:`) is
 `POLICY_DENIED`. The site of `url`, its registrable domain
 (`app.example.com` and `auth.example.com` are one site), scopes two things:
 the browser engine's [`headers`](/reference/web#options) reach the

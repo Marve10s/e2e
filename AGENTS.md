@@ -411,10 +411,14 @@ trees, on both platforms, without a device.
     denied destinations, forbidden fills, and tainted pixels. Model text is
     never evaluated as code, selectors, shell, or config. App content, ledger
     text, and pixels are quoted as untrusted evidence with no policy authority.
-  - Every navigation a test or the agent asks for (`app.open`, the `navigate`
-    verb, `device.openLink`) goes through one rule: `file:`, `data:`, and
-    `javascript:` destinations and malformed URLs are `POLICY_DENIED`. There
-    is no origin or host allowlist; PR #290 removed them on purpose, since a
+  - Every navigation a test or the agent asks for (`app.open`,
+    `browser.goto`, the `navigate` verb) goes through one rule,
+    `resolveNavigationUrl`: only `http:`, `https:`, and the exact
+    `about:blank` pass; every other scheme (`view-source:file:` included) and
+    a malformed URL is `POLICY_DENIED`. `device.openLink` takes custom app
+    schemes, so it refuses a list instead (`packages/mobile/src/links.ts`):
+    `file:`, `data:`, `javascript:`, `view-source:`, `blob:`, `filesystem:`.
+    There is no origin or host allowlist; PR #290 removed them on purpose, since a
     click reaches any origin a typed URL could.
   - Sessions are per-run, target-bound, AES-256-GCM encrypted with a
     memory-only key, and deleted at cleanup; payloads never enter diagnostics.

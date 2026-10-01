@@ -228,7 +228,7 @@ async function captureInto(
  *
  * A `data:` document is *not* admitted, even though its bytes are written by the
  * page that embeds it. It has an opaque origin rather than an inherited one, and
- * navigation denies the scheme by name alongside `file:` and `javascript:`.
+ * navigation admits only http(s) and `about:blank`.
  */
 function isOnSiteFrame(url: string, site: string | undefined): boolean {
   if (url === '' || url === 'about:blank' || url === 'about:srcdoc') return true;

@@ -110,7 +110,10 @@ describe('resolveNavigationUrl', () => {
     ['chrome://version', 'chrome:'],
     ['chrome-extension://abcdefghijklmnop/page.html', 'chrome-extension:'],
     ['devtools://devtools/bundled/inspector.html', 'devtools:'],
-    ['about:blank', 'about:'],
+    ['about:blank#x', 'about:'],
+    ['about:blank?x', 'about:'],
+    ['about:srcdoc', 'about:'],
+    ['about:version', 'about:'],
     ['ftp://example.test/x', 'ftp:'],
     ['ws://localhost:3000/socket', 'ws:'],
     ['myapp://orders/42', 'myapp:'],
@@ -124,6 +127,11 @@ describe('resolveNavigationUrl', () => {
   it('reads a percent-encoded scheme as a path, not a scheme', () => {
     expect(resolveNavigationUrl('view-source%3Afile:///etc/passwd', base).url).toBe('http://localhost:3000/app/view-source%3Afile:///etc/passwd');
     expect(resolveNavigationUrl('%66ile:///etc/passwd', base).url).toBe('http://localhost:3000/app/%66ile:///etc/passwd');
+  });
+
+  it('admits exactly about:blank, which loads nothing', () => {
+    expect(resolveNavigationUrl('about:blank', base).url).toBe('about:blank');
+    expect(resolveNavigationUrl(' ABOUT:blank ', undefined).url).toBe('about:blank');
   });
 
   it('admits http(s) in any case and with surrounding whitespace', () => {
