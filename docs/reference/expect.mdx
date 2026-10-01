@@ -462,11 +462,15 @@ ASSERTION_FAILED: 2 soft assertions failed
 A soft locator or `browser` matcher is still a recorded `expect.<matcher>` step,
 marked failed, so the report shows where in the flow it landed. A soft value
 matcher is not a step, the same as a hard one; its failure appears in the
-final error only.
+attempt's error records.
 
 When the body throws on its own, or times out, that error stays the
 attempt's verdict and the soft failures are recorded beside it under
-`secondaryErrors`. A body that skips itself with `test.skip(...)` drops them.
+`secondaryErrors`. A body that skips itself with `test.skip(...)` keeps them
+there too. The CLI shows `Skipped After Failure`; set
+[`failOnSkippedFailure: true`](/reference/config) to make that run fail with
+exit code 1. Without that option, the test stays skipped and does not affect
+the exit code.
 
 A soft `toMatchSchema` returns the schema's output when the value matches
 and `undefined` after a kept failure, and its type says so.

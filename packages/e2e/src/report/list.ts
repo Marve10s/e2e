@@ -11,7 +11,7 @@ import picocolors from 'picocolors';
 import type { SerializedError } from '../internal/errors.ts';
 import { packageVersion } from '../internal/package-version.ts';
 import type { RunEvent, RunEventFact, RunEventOf, RunEventResult, SetupStep } from '../run/events.ts';
-import type { ArtifactRecord, AttemptRecord, FailureEvidence, ResultStatus, SerialGroupRecord } from '../run/records.ts';
+import { failureBeforeSkip, type ArtifactRecord, type AttemptRecord, type FailureEvidence, type ResultStatus, type SerialGroupRecord } from '../run/records.ts';
 import type { Reporter, ReporterSummary } from '../types.ts';
 import { codeFrame, userFrame } from './code-frame.ts';
 import {
@@ -226,6 +226,7 @@ export class ListReporter implements Reporter {
   /** Whether a live window paints; without one, finished steps stream permanently. */
   private readonly live: boolean;
   private readonly failures: Failure[] = [];
+  private readonly skippedFailures: Failure[] = [];
   /** Every finished test's run, for the `Repeats` summary of a `--repeat-each` run. */
   private readonly runs: { key: string; label: string; run: RepeatRun }[] = [];
   /**
@@ -650,6 +651,7 @@ export class ListReporter implements Reporter {
     const steps = this.pairs.get(key)?.steps ?? [];
     this.pairs.delete(key);
     const group = this.group(result.test.file, result.target.name);
+    const skippedFailure = failureBeforeSkip(result, result.serialGroupId === undefined ? undefined : this.pendingSerial.get(result.serialGroupId)?.group);
     const { durationMs, usage, models, cache, error, videos, failure, screenPath } = this.detailsOf(result);
     addUsage(this.runUsage, usage);
     addModelTally(this.runModels, models);
@@ -683,6 +685,9 @@ export class ListReporter implements Reporter {
     });
     if (statusBucket(result.status) === 'failed') {
       this.failures.push({ group, title, status: result.status, error, videos, failure, screenPath });
+    }
+    if (skippedFailure !== undefined) {
+      this.skippedFailures.push({ group, title, status: result.status, error: skippedFailure, videos, failure, screenPath });
     }
     if (group.planned !== undefined && group.lines.length >= group.planned) this.printGroup(group);
     this.window.redraw();
@@ -820,6 +825,9 @@ export class ListReporter implements Reporter {
     const cache = cacheText(pc, this.runCache);
     if (cache !== undefined) rows.push(padTitle(pc, 'Cache') + cache);
     if (final) rows.push(...this.repeatRows());
+    if (this.skippedFailures.length > 0) {
+      rows.push(padTitle(pc, 'Warnings') + pc.yellow(`${this.skippedFailures.length} skipped after failure`));
+    }
     if (this.errors.length > 0) {
       const count = this.errors.length;
       rows.push(padTitle(pc, 'Errors') + pc.bold(pc.red(`${count} error${count === 1 ? '' : 's'}`)));
@@ -912,15 +920,15 @@ export class ListReporter implements Reporter {
   }
 
   /** vitest's `Failed Tests` section: a banner, then each failure with its code frame. */
-  private printFailures(): void {
+  private printFailures(failures = this.failures, heading = 'Failed Tests'): void {
     const { pc } = this;
-    if (this.failures.length === 0) return;
+    if (failures.length === 0) return;
     this.print('');
-    this.print(this.errorBanner(`Failed Tests ${this.failures.length}`));
+    this.print(this.errorBanner(`${heading} ${failures.length}`));
     this.print('');
-    this.failures.forEach(({ group, title, status, error, videos, failure, screenPath }, index) => {
+    failures.forEach(({ group, title, status, error, videos, failure, screenPath }, index) => {
       this.print(
-        `${pc.bold(pc.bgRed(' FAIL '))} ${this.badge(group.target)} ${bounded(group.file)}${this.separator}${title}`,
+        `${pc.bold(pc.bgRed(status === 'skipped' ? ' SKIP ' : ' FAIL '))} ${this.badge(group.target)} ${bounded(group.file)}${this.separator}${title}`,
       );
       if (error === undefined) {
         this.print(pc.red(`${pc.bold(status)}: no error was recorded`));
@@ -932,7 +940,7 @@ export class ListReporter implements Reporter {
       }
       this.printEvidence(failure, screenPath);
       this.printVideos(videos);
-      const marker = `[${index + 1}/${this.failures.length}]`;
+      const marker = `[${index + 1}/${failures.length}]`;
       const { before, after } = rule(marker, 'right');
       this.print('');
       this.print(pc.red(pc.dim(`${before}${marker}${after}`)));
@@ -1030,6 +1038,7 @@ export class ListReporter implements Reporter {
     }
     this.printExplore();
     this.printFailures();
+    this.printFailures(this.skippedFailures, 'Skipped After Failure');
     this.printErrors();
     this.print('');
     for (const row of this.summaryRows(true)) this.print(row);

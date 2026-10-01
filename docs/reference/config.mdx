@@ -78,6 +78,7 @@ or `module.exports` fails to load.
 
 ```ts
 export interface E2EConfig {
+  failOnSkippedFailure?: boolean;
   /** Stable project id, 1 through 256 characters; defaults to the root `package.json` name. */
   projectId?: string;
   /** The surfaces tests run on; required, at least one, each naming its engine. */
@@ -157,6 +158,17 @@ Every numeric value must be a safe integer. `projectId` falls back to
 `unportable-<sha256 of the project root, 32 hex>` when there is no
 `package.json`. `workers` never exceeds what a target's engine declares. A
 targeted agent action is bounded by the smaller of `actionTimeout` and 15 s.
+
+## failOnSkippedFailure
+
+Set `failOnSkippedFailure: true` to fail the run with exit code 1 when a test
+skips after a soft assertion failure or skips a retry after an earlier failed
+attempt. The default is `false`.
+
+The test keeps its `skipped` status and reason. Its failures remain in the
+report, and the CLI shows them under `Skipped After Failure` with either
+setting. Clean skips, successful retries, and engine cleanup diagnostics do
+not trigger this policy. A skip still stops the body and does not retry.
 
 ## targets
 

@@ -160,6 +160,22 @@ export interface ResultRecord {
  */
 export type WireResultRecord = Omit<ResultRecord, 'target'>;
 
+export function failureBeforeSkip(
+  result: Pick<ResultRecord, 'status' | 'skip' | 'attempts' | 'serialGroupId' | 'test'>,
+  serialGroup?: SerialGroupRecord,
+): SerializedError | undefined {
+  if (result.status !== 'skipped' || result.skip?.cause !== 'explicit') return undefined;
+  const attempts = result.serialGroupId === undefined
+    ? result.attempts
+    : serialGroup?.attempts.flatMap((attempt) => attempt.members.filter((member) => member.testId === result.test.id)) ?? [];
+  for (let index = attempts.length - 1; index >= 0; index -= 1) {
+    const attempt = attempts[index]!;
+    const error = attempt.error ?? attempt.secondaryErrors.find((secondary) => secondary.phase !== 'cleanup');
+    if (error !== undefined) return error;
+  }
+  return undefined;
+}
+
 /** Strips the live target from a result for transport. */
 export function encodeResult(record: ResultRecord): WireResultRecord {
   const { target: _target, ...rest } = record;

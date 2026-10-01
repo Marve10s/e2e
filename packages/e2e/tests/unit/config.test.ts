@@ -7,6 +7,7 @@ import { ConfigurationError, defineEngine } from '../../src/engine/index.ts';
 import { secrets } from '../../src/secrets.ts';
 import type { CommandConfig, E2EConfig, Target, TargetApp } from '../../src/types.ts';
 import { snapshot } from '../helpers/snapshot.ts';
+import { invalid } from '../helpers/invalid.ts';
 
 const ROOT = '/tmp/e2e-config-project';
 const BASE_ENV = {} as NodeJS.ProcessEnv;
@@ -51,6 +52,16 @@ describe('CI mode', () => {
 });
 
 describe('resolveConfig', () => {
+  it('validates the opt-in skip failure policy without invalidating recordings', () => {
+    expect(resolve({}).failOnSkippedFailure).toBe(false);
+    expect(resolve({ failOnSkippedFailure: true }).failOnSkippedFailure).toBe(true);
+    expect(resolve({ failOnSkippedFailure: false }).failOnSkippedFailure).toBe(false);
+    expect(resolve({ failOnSkippedFailure: true }).configDigest).toBe(resolve({}).configDigest);
+    for (const value of ['true', 1, null, {}]) {
+      expect(() => resolve(invalid({ failOnSkippedFailure: value }))).toThrow(/failOnSkippedFailure must be a boolean/);
+    }
+  });
+
   it('applies specification defaults', () => {
     const config = resolve({});
     expect(config.timeout).toBe(120_000);

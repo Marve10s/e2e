@@ -1042,6 +1042,9 @@ export class TargetExecutor implements SerialHost {
           // and the soft failures it kept are noted beside it.
           const notAwaited = await abandonNotAwaited();
           const softFailure = soft.close();
+          if (isRuntimeSkip(cause) && softFailure !== undefined) {
+            secondaryErrors.push(serializeError(softFailure, { phase, projectRoot: this.config.projectRoot, redact }));
+          }
           if (!isRuntimeSkip(cause)) {
             for (const secondary of [notAwaited, softFailure]) {
               if (secondary !== undefined) {

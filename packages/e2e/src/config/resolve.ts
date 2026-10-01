@@ -51,6 +51,7 @@ export interface ResolvedSecret {
 }
 
 export interface ResolvedConfig {
+  readonly failOnSkippedFailure: boolean;
   readonly projectId: string;
   readonly projectRoot: string;
   readonly configPath: string | undefined;
@@ -145,6 +146,7 @@ export interface CliOverrides {
 }
 
 const TOP_LEVEL_KEYS = new Set([
+  'failOnSkippedFailure',
   'projectId',
   'targets',
   'tests',
@@ -267,6 +269,9 @@ export function resolveConfig(
     (ci ? 1 : Math.max(1, Math.floor(os.availableParallelism() / 2)));
 
   const artifactStore = resolveArtifactStore(raw);
+  if (raw.failOnSkippedFailure !== undefined && typeof raw.failOnSkippedFailure !== 'boolean') {
+    throw new ConfigurationError('INVALID_CONFIG', 'failOnSkippedFailure must be a boolean');
+  }
   const { reporters, customReporters } = resolveReporters(raw, cli);
 
   const projectId = resolveProjectId(raw.projectId, options.projectRoot);
@@ -278,6 +283,7 @@ export function resolveConfig(
   const output = resolveOutput(raw.output, cli.output, options.projectRoot, cache.dir, tests);
 
   const resolved: ResolvedConfig = {
+    failOnSkippedFailure: raw.failOnSkippedFailure ?? false,
     projectId,
     projectRoot: options.projectRoot,
     configPath: options.configPath,
@@ -903,6 +909,7 @@ function computeConfigDigest(
   // `targets` digest by declaration below and never enter the clone: an
   // engine holds `secrets.get()` handles, which refuse to serialize.
   const {
+    failOnSkippedFailure: _failOnSkippedFailure,
     artifacts: _artifacts,
     output: _output,
     trace: _trace,

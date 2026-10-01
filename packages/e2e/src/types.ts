@@ -1396,6 +1396,7 @@ export interface Reporter {
 }
 
 export interface E2EConfig {
+  failOnSkippedFailure?: boolean;
   /** Stable project id, 1 through 256 characters; defaults to the root `package.json` name. */
   projectId?: string;
   /** The surfaces tests run on; required, at least one, each naming its engine. */

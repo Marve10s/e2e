@@ -230,7 +230,11 @@ message?)` is synchronous.
 matcher passes (`assertionTimeout` and 100 ms by default, stopping with the
 attempt); a throwing read keeps polling, and it is not a report step.
 `expect.soft(x)` keeps a failure instead of throwing; the attempt fails
-after the body with every soft failure listed.
+after the body with every soft failure listed. If the body calls `test.skip`,
+the test stays skipped and the failures remain in `secondaryErrors`. The CLI
+shows `Skipped After Failure`, also when a retry skips after an earlier
+failure. Set `failOnSkippedFailure: true` in the config to fail the run with
+exit code 1 in either case. The default is `false`; clean skips stay green.
 `expect.any(Class)`, `expect.anything()`, `expect.objectContaining(obj)`,
 `expect.arrayContaining(arr)`, `expect.stringContaining(s)`, and
 `expect.stringMatching(s | RegExp)` stand in for values inside `toEqual`,
