@@ -36,7 +36,7 @@ import { writeJsonReport } from '../report/write.ts';
 import { createRunEventEmitter, toEventResult, type RunEventSink, type RunExitCode, type RunStatus, type RunEventFact, type SetupStep } from './events.ts';
 import { allocateAppPorts } from './app-ports.ts';
 import { inProcessSpawner } from './in-process.ts';
-import { failureBeforeSkip, type ResultRecord, type RunError, type SerialGroupRecord } from './records.ts';
+import { someSkippedAfterFailure, type ResultRecord, type RunError, type SerialGroupRecord } from './records.ts';
 import { runUnits } from './scheduler.ts';
 import { buildWorkPlans, plannedSlots, type TargetWorkPlan } from './units.ts';
 import { SessionStore } from './sessions.ts';
@@ -401,7 +401,8 @@ export async function run(options: RunOptions = {}): Promise<RunOutcome> {
   const currentExitCode = (): RunExitCode =>
     combineExitCodes(
       [
-        ...resultExitCodes(results, serialGroups, loaded.config?.failOnSkippedFailure === true),
+        ...resultExitCodes(results),
+        ...(loaded.config?.failOnSkippedFailure === true && someSkippedAfterFailure(results, serialGroups) ? [1] : []),
         ...runErrors.map((runError) => exitCodeForCategory(runError.error.category)),
         ...(interruptController.signal.aborted ? [130] : []),
       ].filter((code) => code !== 130 || !(runAborted || stoppedEarly)),
@@ -1020,11 +1021,7 @@ function statusOf(exitCode: RunExitCode): Exclude<RunStatus, 'blocked'> {
   return exitCode === 0 ? 'passed' : exitCode === 1 ? 'failed' : exitCode === 130 ? 'interrupted' : 'error';
 }
 
-function resultExitCodes(
-  results: readonly ResultRecord[],
-  serialGroups: readonly SerialGroupRecord[],
-  failOnSkippedFailure: boolean,
-): number[] {
+function resultExitCodes(results: readonly ResultRecord[]): number[] {
   const codes: number[] = [0];
   for (const result of results) {
     switch (result.status) {
@@ -1037,11 +1034,6 @@ function resultExitCodes(
         break;
       case 'interrupted':
         codes.push(130);
-        break;
-      case 'skipped':
-        if (failOnSkippedFailure && failureBeforeSkip(result, serialGroups.find((group) => group.id === result.serialGroupId)) !== undefined) {
-          codes.push(1);
-        }
         break;
       default:
         break;

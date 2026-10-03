@@ -1396,7 +1396,6 @@ export interface Reporter {
 }
 
 export interface E2EConfig {
-  failOnSkippedFailure?: boolean;
   /** Stable project id, 1 through 256 characters; defaults to the root `package.json` name. */
   projectId?: string;
   /** The surfaces tests run on; required, at least one, each naming its engine. */
@@ -1415,6 +1414,8 @@ export interface E2EConfig {
   cleanupTimeout?: number;
   /** Retries per test, 0 through 10; default 1 in CI, else 0. */
   retries?: number;
+  /** Fail the run when a test skips itself after a soft failure or an earlier failed attempt; default false. */
+  failOnSkippedFailure?: boolean;
   /** Parallel workers, 1 through 1024; default 1 in CI, else half the cores. An engine may cap it lower. */
   workers?: number;
   /** `{ store }` hands every artifact to a host store as it is produced. */

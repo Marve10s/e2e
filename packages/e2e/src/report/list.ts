@@ -179,7 +179,7 @@ function serialMemberDetails(group: SerialGroupRecord, testId: string): ResultDe
   };
 }
 
-/** One failed pair, held for the `Failed Tests` section. */
+/** One failed pair, held for the `Failed Tests` section, or a skipped one for `Skipped After Failure`. */
 interface Failure {
   readonly group: FileGroup;
   readonly title: string;
@@ -651,7 +651,8 @@ export class ListReporter implements Reporter {
     const steps = this.pairs.get(key)?.steps ?? [];
     this.pairs.delete(key);
     const group = this.group(result.test.file, result.target.name);
-    const skippedFailure = failureBeforeSkip(result, result.serialGroupId === undefined ? undefined : this.pendingSerial.get(result.serialGroupId)?.group);
+    // Read before `detailsOf` releases the result's serial group.
+    const skippedAfter = failureBeforeSkip(result, (id) => this.pendingSerial.get(id)?.group);
     const { durationMs, usage, models, cache, error, videos, failure, screenPath } = this.detailsOf(result);
     addUsage(this.runUsage, usage);
     addModelTally(this.runModels, models);
@@ -686,8 +687,8 @@ export class ListReporter implements Reporter {
     if (statusBucket(result.status) === 'failed') {
       this.failures.push({ group, title, status: result.status, error, videos, failure, screenPath });
     }
-    if (skippedFailure !== undefined) {
-      this.skippedFailures.push({ group, title, status: result.status, error: skippedFailure, videos, failure, screenPath });
+    if (skippedAfter !== undefined) {
+      this.skippedFailures.push({ group, title, status: result.status, error: skippedAfter.error, videos, ...failureOf(skippedAfter) });
     }
     if (group.planned !== undefined && group.lines.length >= group.planned) this.printGroup(group);
     this.window.redraw();
@@ -920,7 +921,7 @@ export class ListReporter implements Reporter {
   }
 
   /** vitest's `Failed Tests` section: a banner, then each failure with its code frame. */
-  private printFailures(failures = this.failures, heading = 'Failed Tests'): void {
+  private printFailures(heading: string, failures: readonly Failure[]): void {
     const { pc } = this;
     if (failures.length === 0) return;
     this.print('');
@@ -1037,8 +1038,8 @@ export class ListReporter implements Reporter {
       if (!group.printed && group.lines.length > 0) this.printGroup(group);
     }
     this.printExplore();
-    this.printFailures();
-    this.printFailures(this.skippedFailures, 'Skipped After Failure');
+    this.printFailures('Failed Tests', this.failures);
+    this.printFailures('Skipped After Failure', this.skippedFailures);
     this.printErrors();
     this.print('');
     for (const row of this.summaryRows(true)) this.print(row);

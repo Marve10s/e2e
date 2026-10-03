@@ -51,7 +51,6 @@ export interface ResolvedSecret {
 }
 
 export interface ResolvedConfig {
-  readonly failOnSkippedFailure: boolean;
   readonly projectId: string;
   readonly projectRoot: string;
   readonly configPath: string | undefined;
@@ -66,6 +65,7 @@ export interface ResolvedConfig {
   readonly assertionTimeout: number;
   readonly cleanupTimeout: number;
   readonly retries: number;
+  readonly failOnSkippedFailure: boolean;
   readonly workers: number;
   /** Host store every produced artifact is handed to; undefined keeps files local only. */
   readonly artifactStore: ArtifactStore | undefined;
@@ -146,7 +146,6 @@ export interface CliOverrides {
 }
 
 const TOP_LEVEL_KEYS = new Set([
-  'failOnSkippedFailure',
   'projectId',
   'targets',
   'tests',
@@ -156,6 +155,7 @@ const TOP_LEVEL_KEYS = new Set([
   'assertionTimeout',
   'cleanupTimeout',
   'retries',
+  'failOnSkippedFailure',
   'workers',
   'artifacts',
   'output',
@@ -268,10 +268,12 @@ export function resolveConfig(
     boundedInt(raw.workers, 'workers', 1, 1024) ??
     (ci ? 1 : Math.max(1, Math.floor(os.availableParallelism() / 2)));
 
-  const artifactStore = resolveArtifactStore(raw);
-  if (raw.failOnSkippedFailure !== undefined && typeof raw.failOnSkippedFailure !== 'boolean') {
+  const failOnSkippedFailure = raw.failOnSkippedFailure === undefined ? false : raw.failOnSkippedFailure;
+  if (typeof failOnSkippedFailure !== 'boolean') {
     throw new ConfigurationError('INVALID_CONFIG', 'failOnSkippedFailure must be a boolean');
   }
+
+  const artifactStore = resolveArtifactStore(raw);
   const { reporters, customReporters } = resolveReporters(raw, cli);
 
   const projectId = resolveProjectId(raw.projectId, options.projectRoot);
@@ -283,7 +285,6 @@ export function resolveConfig(
   const output = resolveOutput(raw.output, cli.output, options.projectRoot, cache.dir, tests);
 
   const resolved: ResolvedConfig = {
-    failOnSkippedFailure: raw.failOnSkippedFailure ?? false,
     projectId,
     projectRoot: options.projectRoot,
     configPath: options.configPath,
@@ -297,6 +298,7 @@ export function resolveConfig(
     assertionTimeout,
     cleanupTimeout,
     retries,
+    failOnSkippedFailure,
     workers,
     artifactStore,
     output,
@@ -906,6 +908,7 @@ function computeConfigDigest(
   // reporter object changes nothing about what a run records, so it never
   // enters the digest either; the built-in ids digest as they always have,
   // so adding a reporter to a config leaves its cache valid.
+  // `failOnSkippedFailure` decides only the exit code, never what runs.
   // `targets` digest by declaration below and never enter the clone: an
   // engine holds `secrets.get()` handles, which refuse to serialize.
   const {

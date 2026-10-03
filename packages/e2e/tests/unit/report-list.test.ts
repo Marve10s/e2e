@@ -569,6 +569,37 @@ describe('ListReporter', () => {
       expect(lines.some((line) => line.includes('trace.zip'))).toBe(false);
     });
 
+    it('lists a retry that skipped with the failed attempt’s error and evidence', () => {
+      const { lines, output } = capture();
+      const reporter = plainReporter(output);
+      reporter.handle(runStarted());
+      reporter.handle(plan([{ file: 'tests/a.e2e.ts', tests: 1 }]));
+      const failed = failedAttempt('original failure');
+      failed.failure = { url: 'https://app.test/checkout', candidates: ['button "Pay later"'], screen: 'attempt-1:artifact:0' };
+      failed.artifacts = [
+        {
+          id: 'attempt-1:artifact:0',
+          kind: 'log',
+          mediaType: 'text/plain',
+          path: 'chromium/a/attempt-0/screen.txt',
+          redaction: 'complete',
+          producer: { kind: 'attempt' },
+        },
+      ];
+      const skipped = attempt({ id: 'attempt-2', index: 1, status: 'skipped' });
+      reporter.handle(finished({
+        ...result({ status: 'skipped', id: 'a', file: 'tests/a.e2e.ts', title: ['first'], attempts: [failed, skipped] }),
+        skip: { cause: 'explicit', reason: 'feature disabled' },
+      } as RunEventResult));
+      reporter.handle(runFinished({ status: 'passed', exitCode: 0, reportPath: '/project/.e2e/report.json' }));
+      expect(lines.join('\n')).toContain(' Skipped After Failure 1 ');
+      expect(lines).toContain(' SKIP  |chromium| tests/a.e2e.ts > first');
+      expect(lines).toContain('ASSERTION_FAILED: original failure');
+      expect(lines).toContain(' ❯ at https://app.test/checkout');
+      expect(lines).toContain(' ❯ on screen button "Pay later"');
+      expect(lines).toContain(' ❯ screen .e2e/artifacts/chromium/a/attempt-0/screen.txt');
+    });
+
     it('names the status when a failure recorded no error', () => {
       const { lines, output } = capture();
       const reporter = plainReporter(output);

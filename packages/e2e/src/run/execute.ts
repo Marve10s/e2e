@@ -1039,17 +1039,14 @@ export class TargetExecutor implements SerialHost {
           await (registered.fn as SetupFn)(fixtures);
         } catch (cause) {
           // The body's own failure stays the verdict; the step it abandoned
-          // and the soft failures it kept are noted beside it.
+          // and the soft failures it kept are noted beside it. A skip keeps
+          // only the soft failures: the step it abandoned is not one.
           const notAwaited = await abandonNotAwaited();
           const softFailure = soft.close();
-          if (isRuntimeSkip(cause) && softFailure !== undefined) {
-            secondaryErrors.push(serializeError(softFailure, { phase, projectRoot: this.config.projectRoot, redact }));
-          }
-          if (!isRuntimeSkip(cause)) {
-            for (const secondary of [notAwaited, softFailure]) {
-              if (secondary !== undefined) {
-                secondaryErrors.push(serializeError(secondary, { phase: 'body', projectRoot: this.config.projectRoot, redact }));
-              }
+          const kept = isRuntimeSkip(cause) ? [softFailure] : [notAwaited, softFailure];
+          for (const secondary of kept) {
+            if (secondary !== undefined) {
+              secondaryErrors.push(serializeError(secondary, { phase: 'body', projectRoot: this.config.projectRoot, redact }));
             }
           }
           throw cause;
