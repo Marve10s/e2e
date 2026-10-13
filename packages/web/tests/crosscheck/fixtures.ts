@@ -12,6 +12,22 @@ export interface FixturePage {
 
 export const FIXTURE_PAGES: readonly FixturePage[] = [
   {
+    name: 'custom element accessibility defaults',
+    html: `
+      <x-oracle-amount>123</x-oracle-amount>
+      <script>
+        customElements.define('x-oracle-amount', class extends HTMLElement {
+          constructor() {
+            super();
+            const internals = this.attachInternals();
+            internals.role = 'img';
+            internals.ariaLabel = 'Amount';
+          }
+        });
+      </script>
+    `,
+  },
+  {
     name: 'shadow section landmarks',
     html: `
       <article><div id="article-shadow"></div></article>

@@ -25,6 +25,22 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
   element: Element,
   options: { testIdAttribute: string; secureFieldSelector: string; mode: Mode },
 ): SemanticResult<Mode> => {
+  const internals = (globalThis as typeof globalThis & Record<symbol, WeakMap<Element, ElementInternals> | undefined>)[Symbol.for('e2e.elementInternals')];
+  const internalAttributes: Readonly<Record<string, keyof ElementInternals>> = {
+    role: 'role', 'aria-label': 'ariaLabel', 'aria-checked': 'ariaChecked', 'aria-disabled': 'ariaDisabled',
+    'aria-selected': 'ariaSelected', 'aria-expanded': 'ariaExpanded', 'aria-pressed': 'ariaPressed',
+    'aria-hidden': 'ariaHidden', 'aria-level': 'ariaLevel', 'aria-placeholder': 'ariaPlaceholder',
+    'aria-valuenow': 'ariaValueNow', 'aria-valuetext': 'ariaValueText',
+  };
+
+  /** A present content attribute overrides its matching custom-element default, including an empty value. */
+  const accessibilityAttribute = (el: Element, attribute: string): string | null => {
+    const explicit = el.getAttribute(attribute);
+    if (explicit !== null) return explicit;
+    const property = internalAttributes[attribute];
+    const value = property === undefined ? undefined : internals?.get(el)?.[property];
+    return typeof value === 'string' ? value : null;
+  };
   const SKIP_TAGS = [
     'script',
     'style',
@@ -159,7 +175,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     !(el.parentElement instanceof HTMLElement && el.parentElement.isContentEditable);
 
   const implicitRole = memoized((el: Element): string | null => {
-    const explicit = el.getAttribute('role');
+    const explicit = accessibilityAttribute(el, 'role');
     if (explicit !== null && explicit.trim() !== '') {
       const first = explicit.trim().split(/\s+/)[0] ?? null;
       // The vocabulary spells ARIA's `img` as `image`.
@@ -418,7 +434,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
 
   /** True for a subtree the name computation drops: aria-hidden, or hidden by style as innerText leaves it out. */
   const isNameHidden = (el: Element, style: CSSStyleDeclaration | undefined): boolean =>
-    (el.getAttribute('aria-hidden') ?? '').toLowerCase() === 'true' ||
+    (accessibilityAttribute(el, 'aria-hidden') ?? '').toLowerCase() === 'true' ||
     (style !== undefined && (style.display === 'none' || style.visibility === 'hidden'));
 
   /** `alt` of an element HTML-AAM names by it: an `<img>` or an `<input type="image">`. */
@@ -525,14 +541,16 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
         const listbox = role === 'combobox' ? ariaOwnedOf(el).find((owned) => implicitRole(owned) === 'listbox') : el;
         selected = listbox === undefined
           ? []
-          : ariaOwnedOf(listbox).filter((owned) => owned.getAttribute('aria-selected') === 'true' && implicitRole(owned) === 'option');
+          : ariaOwnedOf(listbox).filter((owned) => accessibilityAttribute(owned, 'aria-selected') === 'true' && implicitRole(owned) === 'option');
       }
       if (selected.length === 0 && el instanceof HTMLInputElement) return el.value;
       return selected.map((option) => contentNameOf(option, styleOf(option), walk)).join(' ');
     }
     if (role === 'progressbar' || role === 'scrollbar' || role === 'slider' || role === 'spinbutton' || role === 'meter') {
-      if (el.hasAttribute('aria-valuetext')) return el.getAttribute('aria-valuetext') ?? '';
-      if (el.hasAttribute('aria-valuenow')) return el.getAttribute('aria-valuenow') ?? '';
+      const valueText = accessibilityAttribute(el, 'aria-valuetext');
+      if (valueText !== null) return valueText;
+      const valueNow = accessibilityAttribute(el, 'aria-valuenow');
+      if (valueNow !== null) return valueNow;
       return el.getAttribute('value') ?? '';
     }
     return role === 'menu' ? '' : null;
@@ -575,7 +593,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     if (referenced !== null) return referenced.join(' ');
     const embedded = walk.accessible ? embeddedControlNameOf(el, walk) : null;
     if (embedded !== null) return embedded;
-    const ariaLabel = el.getAttribute('aria-label');
+    const ariaLabel = accessibilityAttribute(el, 'aria-label');
     if (ariaLabel !== null && ariaLabel.trim() !== '') return ariaLabel.trim();
     const alternative = altOf(el) ?? svgTitleOf(el);
     if (alternative !== null) return alternative;
@@ -695,7 +713,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
   /** The label sources an exact label query may match; see `RawNodeData.labels`. */
   const labelsOf = (el: Element): string[] | null => {
     const labels: string[] = [];
-    const ariaLabel = el.getAttribute('aria-label');
+    const ariaLabel = accessibilityAttribute(el, 'aria-label');
     if (ariaLabel !== null && ariaLabel.trim() !== '') labels.push(ariaLabel.trim());
     for (const name of referencedNamesOf(el, nameWalk([], false)) ?? []) labels.push(name);
     for (const label of associatedLabels(el)) {
@@ -837,7 +855,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     // accname reads a labelledby reference (2B) before the element's own aria-label (2C).
     const referenced = referencedNamesOf(el, nameWalk([], true));
     if (referenced !== null) return referenced.join(' ');
-    const ariaLabel = el.getAttribute('aria-label');
+    const ariaLabel = accessibilityAttribute(el, 'aria-label');
     if (ariaLabel !== null && ariaLabel.trim() !== '') return ariaLabel.trim();
     const labels = associatedLabels(el);
     if (labels.length > 0) {
@@ -873,7 +891,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     if (isPlaceholderNamed(el)) {
       const placeholder = el.getAttribute('placeholder');
       if (placeholder !== null && placeholder.trim() !== '') return placeholder.trim();
-      const ariaPlaceholder = el.getAttribute('aria-placeholder');
+      const ariaPlaceholder = accessibilityAttribute(el, 'aria-placeholder');
       if (ariaPlaceholder !== null && ariaPlaceholder.trim() !== '') return ariaPlaceholder.trim();
       if (isEditingHost(el)) return editorPlaceholderOf(el);
     }
@@ -1039,7 +1057,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    * unlisted.
    */
   const hidesSubtree = (el: Element, style: CSSStyleDeclaration | undefined): boolean =>
-    (el.getAttribute('aria-hidden') ?? '').toLowerCase() === 'true' ||
+    (accessibilityAttribute(el, 'aria-hidden') ?? '').toLowerCase() === 'true' ||
     isInert(el, style) ||
     style === undefined ||
     style.display === 'none' ||
@@ -1245,7 +1263,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    * disabled ancestor costs one walk, not one per node.
    */
   const ariaDisabledInChain = memoized((el: Element): boolean => {
-    const attribute = (el.getAttribute('aria-disabled') ?? '').toLowerCase();
+    const attribute = (accessibilityAttribute(el, 'aria-disabled') ?? '').toLowerCase();
     if (attribute === 'true') return true;
     if (attribute === 'false') return false;
     const parent = parentOrHostOf(el);
@@ -1262,7 +1280,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    */
   const isDisabled = (el: Element): boolean => {
     if (el.matches(':disabled')) return true;
-    if (el.getAttribute('aria-disabled') === 'true') return true;
+    if (accessibilityAttribute(el, 'aria-disabled') === 'true') return true;
     const role = implicitRole(el);
     return role !== null && ARIA_DISABLED_ROLES.indexOf(role) !== -1 && ariaDisabledInChain(el);
   };
@@ -1307,18 +1325,18 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     // nothing about what the browser will submit. ARIA fills in only where the
     // element has no native state.
     if (checked === null) {
-      const ariaChecked = el.getAttribute('aria-checked');
+      const ariaChecked = accessibilityAttribute(el, 'aria-checked');
       if (ariaChecked !== null) checked = ariaChecked === 'true';
     }
     if (selectedState === null) {
-      const ariaSelected = el.getAttribute('aria-selected');
+      const ariaSelected = accessibilityAttribute(el, 'aria-selected');
       if (ariaSelected !== null) selectedState = ariaSelected.toLowerCase() === 'true';
     }
 
     const disabled = isDisabled(el);
 
-    const ariaExpanded = el.getAttribute('aria-expanded');
-    const ariaPressed = el.getAttribute('aria-pressed');
+    const ariaExpanded = accessibilityAttribute(el, 'aria-expanded');
+    const ariaPressed = accessibilityAttribute(el, 'aria-pressed');
     // Matched against the shared selector rather than re-derived from tag and
     // type, so this node's `secure` flag and the screenshot mask agree by
     // construction.
@@ -1374,7 +1392,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     const role = isDocumentRoot ? 'document' : roleOf(el, tag);
     let level: number | null = null;
     if (role === 'heading') {
-      const ariaLevel = Number.parseInt(el.getAttribute('aria-level') ?? '', 10);
+      const ariaLevel = Number.parseInt(accessibilityAttribute(el, 'aria-level') ?? '', 10);
       if (Number.isInteger(ariaLevel) && ariaLevel > 0) level = ariaLevel;
       else if (/^h[1-6]$/.test(tag)) level = Number(tag.slice(1));
       // HTML-AAM: a role="heading" element with no aria-level is level 2.
@@ -1409,6 +1427,13 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
   // The conditional return type resolves per call site; inside the body the
   // discriminant narrows the value but not the generic, hence the casts.
   if (options.mode.kind === 'hidden') return isHidden(element) as SemanticResult<Mode>;
+  if (options.mode.kind === 'accessible-hidden') {
+    if (styleOf(element)?.visibility !== 'visible' || isSkippedContent(element)) return true as SemanticResult<Mode>;
+    for (let current: Element | null = element; current !== null; current = current.assignedSlot ?? parentOrHostOf(current)) {
+      if (hidesSubtree(current, styleOf(current))) return true as SemanticResult<Mode>;
+    }
+    return false as SemanticResult<Mode>;
+  }
   if (options.mode.kind === 'node') {
     return describe(element) as SemanticResult<Mode>;
   }

@@ -52,6 +52,7 @@ import { captureObservation } from './observation-capture.ts';
 import { maskOptions, secureFieldMasks } from './observe.ts';
 import { connectionAbort, withOperationDeadline, type OperationBound } from './operation-budget.ts';
 import { CLOSED_SHADOW_ROOTS_INIT_SCRIPT, CLOSED_SHADOW_ROOTS_KEY } from './closed-shadow.ts';
+import { ELEMENT_INTERNALS_INIT_SCRIPT } from './element-internals.ts';
 import { ConfiguredInitScripts, type WebInitScript } from './init-scripts.ts';
 import { SECURE_FIELD_SELECTOR, type RawNodeData } from './read-node.ts';
 import { readSelector, takeReadsFunction } from './read-selector.ts';
@@ -470,6 +471,7 @@ export class PlaywrightSurface {
       },
       configure: async (target) => {
         await target.addInitScript(CLOSED_SHADOW_ROOTS_INIT_SCRIPT);
+        await target.addInitScript(ELEMENT_INTERNALS_INIT_SCRIPT);
         for (const script of initScripts) await target.addInitScript(script);
         target.setDefaultTimeout(CONTEXT_DEFAULT_TIMEOUT_MS);
         target.on('dialog', (dialog) => { void dialogs.dispatch(dialog); });

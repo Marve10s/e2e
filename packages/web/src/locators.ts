@@ -3,6 +3,7 @@
 import type { FrameLocator, Locator as PwLocator, Page } from 'playwright-core';
 import { EngineError, type LocatorExpression, type SemanticQuery, type TextPattern } from 'e2e/engine';
 import { SEARCH_ROOTS_SELECTOR_ENGINE } from './closed-shadow.ts';
+import { BEGIN_ROLE_SELECTOR, internalsRoleSelector, RECORD_ROLE_SELECTOR } from './internals-role-selector.ts';
 import { exactLabelSelector } from './label-selector.ts';
 import { SECURE_FIELD_SELECTOR } from './read-node.ts';
 import { SHOWN_SELECTOR } from './shown-selector.ts';
@@ -85,7 +86,7 @@ const VALUED_SELECTOR = 'input:not([type="checkbox" i]):not([type="radio" i]), t
  * one of ours that searches the scope and its closed roots on its own.
  */
 type Candidates =
-  | { readonly kind: 'playwright'; readonly locate: (roots: PwLocator) => PwLocator }
+  | { readonly kind: 'playwright'; readonly locate: (roots: PwScope) => PwLocator }
   | { readonly kind: 'css'; readonly selector: string }
   | { readonly kind: 'engine'; readonly selector: string };
 
@@ -157,15 +158,20 @@ function candidatesOf(query: SemanticQuery, testIdAttribute: string): Candidates
 }
 
 /** Composes the candidates of one query onto `scope` and the closed shadow roots under it. */
-function queryToPw(scope: PwScope, query: SemanticQuery, testIdAttribute: string): PwLocator {
+function queryToPw(scope: PwScope, query: SemanticQuery, testIdAttribute: string, page: Page): PwLocator {
   const candidates = candidatesOf(query, testIdAttribute);
   switch (candidates.kind) {
     case 'css':
       return scope.locator(`${SEARCH_ROOTS_SELECTOR_ENGINE}=${candidates.selector}`);
     case 'engine':
       return scope.locator(candidates.selector);
-    case 'playwright':
-      return candidates.locate(scope.locator(`${SEARCH_ROOTS_SELECTOR_ENGINE}=`));
+    case 'playwright': {
+      if (query.kind !== 'role') return candidates.locate(scope.locator(`${SEARCH_ROOTS_SELECTOR_ENGINE}=`));
+      const native = candidates.locate(page).locator(RECORD_ROLE_SELECTOR);
+      const relative = page.locator(BEGIN_ROLE_SELECTOR).or(native)
+        .locator(internalsRoleSelector(query, testIdAttribute));
+      return scope.locator(`${SEARCH_ROOTS_SELECTOR_ENGINE}=`).locator(relative);
+    }
   }
 }
 
@@ -191,8 +197,8 @@ export type PostStep =
  * never selects or retains a node that state calls hidden, and the surface's
  * hold of a terminal query to the batch-read state agrees with it.
  */
-function visibleQueryToPw(scope: PwScope, query: SemanticQuery, testIdAttribute: string): PwLocator {
-  return narrowedToVisible(queryToPw(scope, query, testIdAttribute), query);
+function visibleQueryToPw(scope: PwScope, query: SemanticQuery, testIdAttribute: string, page: Page): PwLocator {
+  return narrowedToVisible(queryToPw(scope, query, testIdAttribute, page), query);
 }
 
 /** The visibility narrowing above, on a locator already built for `query`; identity unless the query is `visible`. */
@@ -276,16 +282,16 @@ const DISPLAY_VALUE_COMPOSITION_MESSAGE =
  * unsupported: a display-value query as the scope of a child query, and as a
  * `has` filter.
  */
-function project(scope: PwScope, expression: LocatorExpression, testIdAttribute: string): ProjectedLocator {
+function project(scope: PwScope, expression: LocatorExpression, testIdAttribute: string, page: Page): ProjectedLocator {
   switch (expression.kind) {
     case 'query': {
       const inner =
         expression.scope === undefined
           ? scope
-          : requireComposable(project(scope, expression.scope, testIdAttribute));
+          : requireComposable(project(scope, expression.scope, testIdAttribute, page));
       const { query } = expression;
       const exactLabel = query.kind === 'label' && query.value.kind === 'string' && query.value.exact ? query.value : null;
-      const locator = visibleQueryToPw(inner, query, testIdAttribute);
+      const locator = visibleQueryToPw(inner, query, testIdAttribute, page);
       return {
         locator,
         displayValue: query.kind === 'displayValue' ? query.value : null,
@@ -296,11 +302,11 @@ function project(scope: PwScope, expression: LocatorExpression, testIdAttribute:
       };
     }
     case 'filter': {
-      const source = project(scope, expression.source, testIdAttribute);
+      const source = project(scope, expression.source, testIdAttribute, page);
       const options: PwFilterOptions = {};
       if (expression.hasText !== undefined) options.hasText = patternToPw(expression.hasText);
       if (expression.has !== undefined) {
-        options.has = requireComposable(project(scope, expression.has, testIdAttribute));
+        options.has = requireComposable(project(scope, expression.has, testIdAttribute, page));
       }
       if (source.steps.length > 0) {
         return { ...source, steps: [...source.steps, { kind: 'filter', options }] };
@@ -313,7 +319,7 @@ function project(scope: PwScope, expression: LocatorExpression, testIdAttribute:
       };
     }
     case 'index': {
-      const source = project(scope, expression.source, testIdAttribute);
+      const source = project(scope, expression.source, testIdAttribute, page);
       if (source.displayValue !== null || source.name !== null) {
         return {
           ...source,
@@ -340,7 +346,7 @@ function project(scope: PwScope, expression: LocatorExpression, testIdAttribute:
         visible: false,
       };
     case 'frame':
-      return project(scope.frameLocator(expression.selector), expression.source, testIdAttribute);
+      return project(scope.frameLocator(expression.selector), expression.source, testIdAttribute, page);
   }
 }
 
@@ -350,7 +356,7 @@ export function projectExpression(
   expression: LocatorExpression,
   testIdAttribute: string,
 ): ProjectedLocator {
-  return project(page, expression, testIdAttribute);
+  return project(page, expression, testIdAttribute, page);
 }
 
 /**

@@ -17,7 +17,8 @@ interface FakeLocator {
 function fakeLocator(chain: readonly string[]): PwLocator {
   const self = {
     chain,
-    locator: (selector: string) => fakeLocator([...chain, `locator(${selector})`]),
+    locator: (selector: string | PwLocator) => fakeLocator([...chain, typeof selector === 'string' ? `locator(${selector})` : `chain(${chainOf(selector).join('>')})`]),
+    or: (other: PwLocator) => fakeLocator([...chain, `or(${chainOf(other).join('>')})`]),
     getByRole: (role: string, options?: Record<string, unknown>) =>
       fakeLocator([
         ...chain,
@@ -59,8 +60,8 @@ const projectExpression = (target: Page, expression: LocatorExpression) => proje
 const ROOTS = 'locator(e2e-roots=)';
 
 /** The step an exact role name projects to: the name with icon-font glyphs allowed around its words. */
-function exactRoleName(role: string, name: string, options = ''): string {
-  return `role(${role},{${options}"name":"/^[\\\\s\\\\p{Co}]*${name}[\\\\s\\\\p{Co}]*$/u"})`;
+function exactRoleName(role: string, name: string, options = '') {
+  return expect.stringContaining(`or(role(${role},{${options}"name":"/^[\\\\s\\\\p{Co}]*${name}[\\\\s\\\\p{Co}]*$/u"})`);
 }
 
 const shared: LocatorExpression = {
@@ -95,9 +96,9 @@ describe('projectExpression', () => {
     expect(first.steps).toEqual([{ kind: 'index', index: 'first' }]);
     expect(first.composable === null ? null : chainOf(first.composable)).toEqual([EXACT_LABEL, 'first']);
     const scoped = projectExpression(page, { ...textbox, scope: firstLabel } as LocatorExpression);
-    expect(chainOf(scoped.locator)).toEqual([EXACT_LABEL, 'first', ROOTS, 'role(textbox)']);
+    expect(chainOf(scoped.locator)).toEqual([EXACT_LABEL, 'first', ROOTS, expect.stringContaining('or(role(textbox)')]);
     const rows = projectExpression(page, { kind: 'filter', source: textbox, has: label });
-    expect(chainOf(rows.locator)).toEqual([ROOTS, 'role(textbox)', `filter(has=${EXACT_LABEL})`]);
+    expect(chainOf(rows.locator)).toEqual([ROOTS, expect.stringContaining('or(role(textbox)'), `filter(has=${EXACT_LABEL})`]);
     // A substring label query keeps Playwright's own matching.
     const loose = projectExpression(page, {
       kind: 'query',
@@ -169,7 +170,7 @@ describe('projectExpression', () => {
       kind: 'query',
       query: { kind: 'role', value: { kind: 'string', value: 'checkbox', exact: true }, states: { checked: true, disabled: false } },
     };
-    expect(chainOf(projectExpression(page, checkbox).locator)).toEqual([ROOTS, 'role(checkbox,{"checked":true,"disabled":false})']);
+    expect(chainOf(projectExpression(page, checkbox).locator)).toEqual([ROOTS, expect.stringContaining('or(role(checkbox,{"checked":true,"disabled":false})')]);
   });
 
   it('spells the contract image role as the img role the selector knows', () => {
@@ -182,7 +183,7 @@ describe('projectExpression', () => {
       kind: 'query',
       query: { kind: 'role', value: { kind: 'string', value: 'tablist', exact: true } },
     };
-    expect(chainOf(projectExpression(page, tablist).locator)).toEqual([ROOTS, 'role(tablist)']);
+    expect(chainOf(projectExpression(page, tablist).locator)).toEqual([ROOTS, expect.stringContaining('or(role(tablist)')]);
   });
 
   it('defers positions on a displayValue query until its candidates are value-filtered', () => {
@@ -207,7 +208,7 @@ describe('projectExpression', () => {
     });
     expect(chainOf(projected.locator)).toEqual([
       'locator(e2e-roots=input:not([type="checkbox" i]):not([type="radio" i]), textarea, select)',
-      `filter(hasText=x,has=${ROOTS}>role(textbox))`,
+      expect.stringMatching(/^filter\(hasText=x,has=.*or\(role\(textbox\)/),
     ]);
     expect(projected.displayValue).not.toBeNull();
     expect(projected.steps).toEqual([{ kind: 'index', index: 0 }]);
@@ -237,7 +238,7 @@ describe('projectExpression', () => {
     expect(filter.kind).toBe('filter');
     if (filter.kind !== 'filter') return;
     expect(filter.options.hasText).toBe('x');
-    expect(chainOf(filter.options.has!)).toEqual([ROOTS, 'role(textbox)']);
+    expect(chainOf(filter.options.has!)).toEqual([ROOTS, expect.stringContaining('or(role(textbox)')]);
   });
 
   it('still rejects a displayValue has-filter after a position', () => {
