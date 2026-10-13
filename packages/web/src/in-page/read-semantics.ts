@@ -26,21 +26,11 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
   options: { testIdAttribute: string; secureFieldSelector: string; mode: Mode },
 ): SemanticResult<Mode> => {
   const internals = (globalThis as typeof globalThis & Record<symbol, WeakMap<Element, ElementInternals> | undefined>)[Symbol.for('e2e.elementInternals')];
-  const internalAttributes: Readonly<Record<string, keyof ElementInternals>> = {
-    role: 'role', 'aria-label': 'ariaLabel', 'aria-checked': 'ariaChecked', 'aria-disabled': 'ariaDisabled',
-    'aria-selected': 'ariaSelected', 'aria-expanded': 'ariaExpanded', 'aria-pressed': 'ariaPressed',
-    'aria-hidden': 'ariaHidden', 'aria-level': 'ariaLevel', 'aria-placeholder': 'ariaPlaceholder',
-    'aria-valuenow': 'ariaValueNow', 'aria-valuetext': 'ariaValueText',
-  };
+  const internalAttributes = { role: 'role', 'aria-label': 'ariaLabel', 'aria-hidden': 'ariaHidden' } as const;
 
   /** A present content attribute overrides its matching custom-element default, including an empty value. */
-  const accessibilityAttribute = (el: Element, attribute: string): string | null => {
-    const explicit = el.getAttribute(attribute);
-    if (explicit !== null) return explicit;
-    const property = internalAttributes[attribute];
-    const value = property === undefined ? undefined : internals?.get(el)?.[property];
-    return typeof value === 'string' ? value : null;
-  };
+  const accessibilityAttribute = (el: Element, attribute: keyof typeof internalAttributes): string | null =>
+    el.getAttribute(attribute) ?? internals?.get(el)?.[internalAttributes[attribute]] ?? null;
   const SKIP_TAGS = [
     'script',
     'style',
@@ -468,7 +458,13 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    * under an `aria-hidden` ancestor, which excludes it from the tree as
    * surely as its own attribute would.
    */
-  const isReferenceHidden = (el: Element): boolean => isHidden(el) || el.closest('[aria-hidden="true" i]') !== null;
+  const isReferenceHidden = (el: Element): boolean => {
+    if (isHidden(el)) return true;
+    for (let current: Element | null = el; current !== null; current = current.parentElement) {
+      if (accessibilityAttribute(current, 'aria-hidden')?.toLowerCase() === 'true') return true;
+    }
+    return false;
+  };
 
   /**
    * The element an id names for `el`, looked up in `el`'s own tree: an IDREF
@@ -541,16 +537,14 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
         const listbox = role === 'combobox' ? ariaOwnedOf(el).find((owned) => implicitRole(owned) === 'listbox') : el;
         selected = listbox === undefined
           ? []
-          : ariaOwnedOf(listbox).filter((owned) => accessibilityAttribute(owned, 'aria-selected') === 'true' && implicitRole(owned) === 'option');
+          : ariaOwnedOf(listbox).filter((owned) => owned.getAttribute('aria-selected') === 'true' && implicitRole(owned) === 'option');
       }
       if (selected.length === 0 && el instanceof HTMLInputElement) return el.value;
       return selected.map((option) => contentNameOf(option, styleOf(option), walk)).join(' ');
     }
     if (role === 'progressbar' || role === 'scrollbar' || role === 'slider' || role === 'spinbutton' || role === 'meter') {
-      const valueText = accessibilityAttribute(el, 'aria-valuetext');
-      if (valueText !== null) return valueText;
-      const valueNow = accessibilityAttribute(el, 'aria-valuenow');
-      if (valueNow !== null) return valueNow;
+      if (el.hasAttribute('aria-valuetext')) return el.getAttribute('aria-valuetext') ?? '';
+      if (el.hasAttribute('aria-valuenow')) return el.getAttribute('aria-valuenow') ?? '';
       return el.getAttribute('value') ?? '';
     }
     return role === 'menu' ? '' : null;
@@ -891,7 +885,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     if (isPlaceholderNamed(el)) {
       const placeholder = el.getAttribute('placeholder');
       if (placeholder !== null && placeholder.trim() !== '') return placeholder.trim();
-      const ariaPlaceholder = accessibilityAttribute(el, 'aria-placeholder');
+      const ariaPlaceholder = el.getAttribute('aria-placeholder');
       if (ariaPlaceholder !== null && ariaPlaceholder.trim() !== '') return ariaPlaceholder.trim();
       if (isEditingHost(el)) return editorPlaceholderOf(el);
     }
@@ -1115,7 +1109,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     const style = styleOf(el);
     if (style === undefined) return false;
     if (el.children.length > 0) return false;
-    const explicit = (el.getAttribute('role') ?? '').trim();
+    const explicit = (accessibilityAttribute(el, 'role') ?? '').trim();
     if (explicit !== '') return false;
     if (directTextOf(el) !== '') return false;
     const rect = el.getBoundingClientRect();
@@ -1263,7 +1257,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    * disabled ancestor costs one walk, not one per node.
    */
   const ariaDisabledInChain = memoized((el: Element): boolean => {
-    const attribute = (accessibilityAttribute(el, 'aria-disabled') ?? '').toLowerCase();
+    const attribute = (el.getAttribute('aria-disabled') ?? '').toLowerCase();
     if (attribute === 'true') return true;
     if (attribute === 'false') return false;
     const parent = parentOrHostOf(el);
@@ -1280,7 +1274,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    */
   const isDisabled = (el: Element): boolean => {
     if (el.matches(':disabled')) return true;
-    if (accessibilityAttribute(el, 'aria-disabled') === 'true') return true;
+    if (el.getAttribute('aria-disabled') === 'true') return true;
     const role = implicitRole(el);
     return role !== null && ARIA_DISABLED_ROLES.indexOf(role) !== -1 && ariaDisabledInChain(el);
   };
@@ -1325,18 +1319,18 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     // nothing about what the browser will submit. ARIA fills in only where the
     // element has no native state.
     if (checked === null) {
-      const ariaChecked = accessibilityAttribute(el, 'aria-checked');
+      const ariaChecked = el.getAttribute('aria-checked');
       if (ariaChecked !== null) checked = ariaChecked === 'true';
     }
     if (selectedState === null) {
-      const ariaSelected = accessibilityAttribute(el, 'aria-selected');
+      const ariaSelected = el.getAttribute('aria-selected');
       if (ariaSelected !== null) selectedState = ariaSelected.toLowerCase() === 'true';
     }
 
     const disabled = isDisabled(el);
 
-    const ariaExpanded = accessibilityAttribute(el, 'aria-expanded');
-    const ariaPressed = accessibilityAttribute(el, 'aria-pressed');
+    const ariaExpanded = el.getAttribute('aria-expanded');
+    const ariaPressed = el.getAttribute('aria-pressed');
     // Matched against the shared selector rather than re-derived from tag and
     // type, so this node's `secure` flag and the screenshot mask agree by
     // construction.
@@ -1392,7 +1386,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     const role = isDocumentRoot ? 'document' : roleOf(el, tag);
     let level: number | null = null;
     if (role === 'heading') {
-      const ariaLevel = Number.parseInt(accessibilityAttribute(el, 'aria-level') ?? '', 10);
+      const ariaLevel = Number.parseInt(el.getAttribute('aria-level') ?? '', 10);
       if (Number.isInteger(ariaLevel) && ariaLevel > 0) level = ariaLevel;
       else if (/^h[1-6]$/.test(tag)) level = Number(tag.slice(1));
       // HTML-AAM: a role="heading" element with no aria-level is level 2.

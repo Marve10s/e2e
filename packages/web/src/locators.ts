@@ -3,7 +3,7 @@
 import type { FrameLocator, Locator as PwLocator, Page } from 'playwright-core';
 import { EngineError, type LocatorExpression, type SemanticQuery, type TextPattern } from 'e2e/engine';
 import { SEARCH_ROOTS_SELECTOR_ENGINE } from './closed-shadow.ts';
-import { BEGIN_ROLE_SELECTOR, internalsRoleSelector, RECORD_ROLE_SELECTOR } from './internals-role-selector.ts';
+import { BEGIN_ROLE_SELECTOR, internalsRoleSelector, INTERNALS_PRESENT_SELECTOR, RECORD_NAME_CANDIDATES_SELECTOR, RECORD_ROLE_SELECTOR } from './internals-role-selector.ts';
 import { exactLabelSelector } from './label-selector.ts';
 import { SECURE_FIELD_SELECTOR } from './read-node.ts';
 import { SHOWN_SELECTOR } from './shown-selector.ts';
@@ -168,9 +168,15 @@ function queryToPw(scope: PwScope, query: SemanticQuery, testIdAttribute: string
     case 'playwright': {
       if (query.kind !== 'role') return candidates.locate(scope.locator(`${SEARCH_ROOTS_SELECTOR_ENGINE}=`));
       const native = candidates.locate(page).locator(RECORD_ROLE_SELECTOR);
-      const relative = page.locator(BEGIN_ROLE_SELECTOR).or(native)
-        .locator(internalsRoleSelector(query, testIdAttribute));
-      return scope.locator(`${SEARCH_ROOTS_SELECTOR_ENGINE}=`).locator(relative);
+      let relative = page.locator(BEGIN_ROLE_SELECTOR).or(native);
+      const { name, ...unnamedQuery } = query;
+      if (name !== undefined) {
+        const unnamed = candidatesOf(unnamedQuery, testIdAttribute);
+        if (unnamed.kind === 'playwright') relative = relative.or(
+          unnamed.locate(page.locator(INTERNALS_PRESENT_SELECTOR)).locator(RECORD_NAME_CANDIDATES_SELECTOR),
+        );
+      }
+      return scope.locator(`${SEARCH_ROOTS_SELECTOR_ENGINE}=`).locator(relative.locator(internalsRoleSelector(query, testIdAttribute)));
     }
   }
 }

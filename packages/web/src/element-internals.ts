@@ -5,10 +5,12 @@ export const ELEMENT_INTERNALS_INIT_SCRIPT = `(() => {
   const attachInternals = HTMLElement.prototype.attachInternals;
   if (attachInternals === undefined) return;
   const internals = new WeakMap();
+  Object.defineProperty(internals, 'count', { value: 0, writable: true });
   Object.defineProperty(globalThis, key, { value: internals });
   HTMLElement.prototype.attachInternals = function () {
     const attached = attachInternals.call(this);
     internals.set(this, attached);
+    internals.count += 1;
     return attached;
   };
 })();`;

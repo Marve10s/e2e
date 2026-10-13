@@ -697,11 +697,12 @@ control is a `tablist`, a progress indicator a `progressbar`, a stepper a
 `spinbutton`) and keeps any other type verbatim, so a role with no native
 widget, such as `tooltip` or `figure`, matches nothing on a phone.
 
-On web, custom elements can supply `role`, `ariaLabel`, and the reported
-ARIA states through `ElementInternals`. Observations, role queries, and
-accessible-name reads use those defaults; a present `role` or matching
-`aria-*` attribute overrides its default, even when empty. The engine records
-`attachInternals()` calls before page scripts run without adding attributes.
+On web, observations, role queries, and accessible-name reads use custom
+elements' `ElementInternals.role` and `ariaLabel` defaults. `ariaHidden`
+defaults exclude their subtree from accessibility. Present matching attributes
+override these defaults, even when empty. Other internals ARIA properties are
+not read. The engine records `attachInternals()` calls before page scripts run
+without adding attributes.
 Internals attached before e2e connects to an existing page are not readable;
 reload that page to capture them.
 
