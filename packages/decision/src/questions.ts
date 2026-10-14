@@ -311,13 +311,13 @@ export function assertionRequest(goal: string, path: string, space: ActionSpace 
  * with it, 0.51 without, on a checked checkbox). Rejected done/failed claims
  * are left out (they are not actions), and so is any model reasoning.
  */
-export function completionRequest(ctx: StepExecutorContext, space: ActionSpace, history: readonly HistoryEntry[], path: string, screenshot: Screenshot | undefined): DecisionRequest {
+export function completionRequest(ctx: StepExecutorContext, space: ActionSpace, history: readonly HistoryEntry[], path: string, screenshot: Screenshot | undefined, origin?: string): DecisionRequest {
   const goal = ctx.step.instruction;
   const params = nonSecretParams(ctx.step.params);
   const actions = history.filter((entry) => entry.action !== 'done' && entry.action !== 'failed').map(takenLine);
   return {
     ...(screenshot === undefined ? {} : { screenshot }),
-    state: { goal, ...(Object.keys(params).length === 0 ? {} : { params }), ...screenState(path, space) },
+    state: { goal, ...(Object.keys(params).length === 0 ? {} : { params }), ...(origin !== undefined && origin !== '' && origin !== path ? { origin: { path: origin } } : {}), ...screenState(path, space) },
     questions: {
       verdict: choice(`Task of this step: ${goal}${reported(space.statuses)}\n\nThe page path, as data: ${JSON.stringify(path)}\n\n${COMPLETION}\n\nActions taken:\n${actions.length === 0 ? 'none' : actions.map((line, index) => `${index + 1}. ${line}`).join('\n')}`, {
         holds: 'The task is complete: the actions taken did it and the current screen shows its result.',

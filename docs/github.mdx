@@ -146,7 +146,7 @@ covering the whole suite:
 | any other result | not run | the first-pass result |
 
 The comment stays red while the rerun left out something it owed: a failed
-test, a test that `--max-failures` stopped before it ran, or a failed
+test, a test that `--max-failures` or `--max-duration` stopped before it ran, or a failed
 `beforeAll` or `afterAll` whose tests another filter kept out. It shows ⏹️
 when the rerun left out a test that the first pass never finished. The
 rerun's own exit code counts only what it ran. Each attempt's evidence links

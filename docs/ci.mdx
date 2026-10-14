@@ -190,6 +190,8 @@ To keep the checks predictable:
 - Add `--max-failures <n>` to stop the run after that many failed tests, so
   a broken deploy doesn't spend a model call on each remaining step. The job
   exits 1.
+- Add `--max-duration <ms>` to limit test-running time; the clock starts
+  when tests start, not during app startup. The job exits 1.
 
 ## Sharding
 

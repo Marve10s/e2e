@@ -11,7 +11,7 @@ import { SoftFailures } from '../expect/soft.ts';
 import type { DebugTrace } from '../internal/debug.ts';
 import { classifyError, ConfigurationError, InfrastructureError, serializeError, TestTimeoutError, type SerializedError } from '../internal/errors.ts';
 import { resultId, timestamp, uuidv7 } from '../internal/ids.ts';
-import { Deadline, withTimeout } from '../internal/time.ts';
+import { Deadline, MAX_TIMER_MS, withTimeout } from '../internal/time.ts';
 import { attemptVideo } from '../internal/recording-modes.ts';
 import type { TestFixtures } from '../types.ts';
 import { createAttemptArtifacts, resultSegment } from './artifacts.ts';
@@ -88,9 +88,6 @@ export interface AttemptReservation {
 export interface AttemptClosed {
   readonly cleanup: AttemptRecord['cleanup'];
 }
-
-/** Longest delay `setTimeout` honors; a longer deadline needs no timer the attempt could outlive. */
-const MAX_TIMER_MS = 2 ** 31 - 1;
 
 /**
  * Validates the options and publishes a hosted attempt, synchronously, so

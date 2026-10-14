@@ -84,7 +84,10 @@ credentials. See [AI SDK providers](#ai-sdk-providers).
   <Tab title="Local or self-hosted">
 
 Install `@ai-sdk/openai-compatible`. Set the endpoint URL and a model ID the
-endpoint serves. Add `apiKey` if the server needs one:
+endpoint serves. Add `apiKey` if the server needs one. Set
+`supportsStructuredOutputs: true` when the server accepts a JSON schema
+response format, as Ollama does. Without it, the AI SDK drops the schema with a
+`responseFormat` warning and agent steps may take more model calls:
 
 ```ts title="Model setup"
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
@@ -92,6 +95,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 const local = createOpenAICompatible({
   name: 'local',
   baseURL: 'http://127.0.0.1:11434/v1',
+  supportsStructuredOutputs: true,
   // apiKey: process.env.LLM_API_KEY,
 });
 

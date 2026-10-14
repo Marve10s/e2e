@@ -261,7 +261,7 @@ export interface Browser extends Expectable<BrowserExpectation> {
   waitForDownload(
     trigger: () => Promise<void>,
     options?: { timeout?: number },
-  ): Promise<{ path: string; suggestedFilename: string }>;
+  ): Promise<{ path: string; absolutePath: string; suggestedFilename: string }>;
   /** Viewport-level keyboard, for whatever has focus. */
   readonly keyboard: {
     /** Sends one key. */
@@ -616,7 +616,7 @@ export function createBrowserFixture(surface: PlaywrightSurface, context: Engine
         if (remote === undefined) await saveLocally(download, absolute, surface.unservedDownloads());
         else await saveFromBrowser(download, remote, absolute, currentOperation.signal);
         context.attachArtifact('download', relative);
-        return { path: relative, suggestedFilename };
+        return { path: relative, absolutePath: absolute, suggestedFilename };
       }, (cause, label) => {
         // The trigger is test code, so its errors keep their original classification.
         if (triggerFailure !== undefined && Object.is(cause, triggerFailure.cause)) throw cause;

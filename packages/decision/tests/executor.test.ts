@@ -764,6 +764,32 @@ describe('context', () => {
     });
     await expect(decisionExecutor({ model }).runStep(fixture.ctx)).rejects.toMatchObject({ code: 'MODEL_OUTPUT_INVALID' });
   });
+  it('sends the step origin to the completion check when the page moved', async () => {
+    const { model, requests } = scriptedDecision((id, keys, call) => ({
+      choice: id === 'operation' ? (call === 0 ? 'tap' : 'done') : id === 'verdict' ? 'holds' : (keys[0] ?? ''),
+    }));
+    const fixture = context({ tree: BUTTONS });
+    let seen = 0;
+    fixture.observe.mockImplementation(async () => {
+      seen += 1;
+      const path = seen <= 1 ? '/edit.html' : '/item.html';
+      return { revision: String(seen), text: '#save button', truncated: false, viewport: { width: 800, height: 600 }, tree: BUTTONS, path };
+    });
+    const verdict = await decisionExecutor({ model }).runStep(fixture.ctx);
+    expect(verdict).toMatchObject({ status: 'passed' });
+    const check = requests.find((request) => 'verdict' in request.questions);
+    expect(check?.state).toMatchObject({ origin: { path: '/edit.html' }, page: { path: '/item.html' } });
+  });
+  it('omits the origin when the step never left its page', async () => {
+    const { model, requests } = scriptedDecision((id, keys, call) => ({
+      choice: id === 'operation' ? (call === 0 ? 'tap' : 'done') : id === 'verdict' ? 'holds' : (keys[0] ?? ''),
+    }));
+    const fixture = context({ tree: BUTTONS, observation: { path: '/item.html' } });
+    fixture.observe.mockImplementation(async () => ({ revision: '1', text: '#save button', truncated: false, viewport: { width: 800, height: 600 }, tree: BUTTONS, path: '/item.html' }));
+    await decisionExecutor({ model }).runStep(fixture.ctx);
+    const check = requests.find((request) => 'verdict' in request.questions);
+    expect(check?.state).not.toMatchObject({ origin: expect.anything() });
+  });
 });
 
 describe('text model history', () => {

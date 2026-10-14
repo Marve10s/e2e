@@ -125,6 +125,7 @@ engineSnapshot.treeUnavailable satisfies true | undefined;
 ({ cache: 'read-write' }) satisfies E2EConfig;
 ({ targets, cache: 'read-write' }) satisfies E2EConfig;
 ({ targets, failOnSkippedFailure: true }) satisfies E2EConfig;
+({ targets, maxDuration: 900_000 }) satisfies E2EConfig;
 ({ targets, cache: { mode: 'read-only', store: remoteStore, dir: 'shared-cache' } }) satisfies E2EConfig;
 ({ targets: [{ platform: 'ios' }] }) satisfies E2EConfig;
 // @ts-expect-error specVersion is gone; the runner version is the format version

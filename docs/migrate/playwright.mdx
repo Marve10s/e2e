@@ -57,6 +57,7 @@ A Playwright key such as `testDir`, `baseURL`, `use`, `webServer`, or
 | `testIgnore` | a `tests` entry with a leading `!`: `tests: ['tests/**/*.e2e.ts', '!tests/wip/**']` | renamed |
 | `fullyParallel` | not yet; a file's tests run in order on one worker, files run in parallel | missing |
 | `maxFailures` | `--max-failures <n>`; no config key | renamed |
+| `globalTimeout` | `maxDuration`, or `--max-duration <ms>`; the clock starts with the tests, not app startup | renamed |
 | `reporter` | `reporters: ['list', 'junit']`; also `json` and `markdown` | renamed |
 | `reporter: 'html'` | no equivalent; `markdown` writes `.e2e/summary.md`, and each failed test gets a `trace.md` page under `.e2e/results/` | missing |
 | `outputDir` | `output`, default `.e2e`, holding `results/` (cleared when a run starts, like `outputDir`) beside the report | renamed |

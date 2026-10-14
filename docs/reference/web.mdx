@@ -336,7 +336,7 @@ export interface Browser extends Expectable<BrowserExpectation> {
   waitForDownload(
     trigger: () => Promise<void>,
     options?: { timeout?: number },
-  ): Promise<{ path: string; suggestedFilename: string }>;
+  ): Promise<{ path: string; absolutePath: string; suggestedFilename: string }>;
   /** Viewport-level keyboard, for whatever has focus. */
   readonly keyboard: {
     /** Sends one key. */
@@ -655,7 +655,10 @@ unhandled dialog does. One that throws fails the next step, or the attempt at
 its end when no step follows, with its error: a failed `expect` stays
 `ASSERTION_FAILED`, an unclassified throw is `ENGINE_FAILURE`.
 `waitForDownload` registers the file as a `download`
-artifact and throws `ACTION_FAILED` when it does not complete in time. A
+artifact and returns its relative `path`, readable runner-side `absolutePath`,
+and `suggestedFilename`. Use `absolutePath` with file APIs to inspect its
+contents, including on a hosted browser. It throws `ACTION_FAILED` when it
+does not complete in time. A
 trigger that resolves in time but starts no download fails with
 `no download started within <n>ms; the trigger resolved after <m>ms`, where
 the wait includes the trigger's own time. A trigger still running at the

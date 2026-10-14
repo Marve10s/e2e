@@ -35,12 +35,13 @@ npx e2e telemetry [disable|enable] # anonymous usage telemetry: status or switch
 | `--tag <tags>` | Any of the tags, comma-separated or repeated; all of them with `--tag-mode all`. An empty `--target`, `--tag`, or `--agent` value is a usage error, exit 2. |
 | `--exclude-tag <tags>` | Drop tests carrying any of these tags, however selected. |
 | `--grep <pattern>`, `--grep-invert <pattern>` | Keep, or drop, tests whose title (describe titles and test title joined by spaces, `checkout pays`; not file or tags) matches a regular expression. Bare pattern or `'/pattern/i'`; repeat for alternatives. |
-| `--last-failed` | The tests the previous run (`<output>/report.json`) did not pass or never ran (`--max-failures` included), plus every test in a failed `beforeAll` or `afterAll` scope. A test another filter leaves out stays owed (`run.carried` in the report) until a rerun runs it. No report is `NO_LAST_RUN`, exit 2. |
+| `--last-failed` | The tests the previous run (`<output>/report.json`) did not pass or never ran (`--max-failures` and `--max-duration` included), plus every test in a failed `beforeAll` or `afterAll` scope. A test another filter leaves out stays owed (`run.carried` in the report) until a rerun runs it. No report is `NO_LAST_RUN`, exit 2. |
 | `--shard <index/total>` | One contiguous slice of the selected tests (`--shard 2/3`), cut after every other filter; serial groups stay whole, each shard brings its own setup tests. |
 | `--headed` | Visible browser or simulator when the engine supports it. |
 | `--agent <names>` | Run unpinned tests as these `agents.<name>` entries (default `agents.default`), comma-separated or repeated; several names run each such test once per agent. |
 | `--workers <n>`, `--retries <n>` | Override the resolved values; retries 0-10, workers 1-1024. |
 | `--max-failures <n>` | Stop after n failures: the rest skip (cause `failure-limit`), running tests end `interrupted`; exit 1. |
+| `--max-duration <ms>` | Stop after ms of running tests, over config `maxDuration`: the rest skip (cause `time-limit`), running tests end `interrupted`, `RUN_TIMEOUT`; exit 1. |
 | `--repeat-each <n>` | Run every selected test n times, each run its own result (`repeat` 0 through n-1); add `--no-cache` or later runs replay the first's recording. The `Repeats` summary row names each unstable test's failed runs. |
 | `--reporter <ids>` | `list`, `json`, `junit`, `markdown`, comma-separated; `json` cannot combine with `list`. |
 | `--output <dir>` | Results directory, over the config's `output` (default `.e2e`). |
@@ -86,6 +87,9 @@ With npm, use `npm exec -- e2e run --headed` to pass flags to e2e.
 ## The replay cache
 
 Entries live under `.e2e/cache/`, one file per key, named by key digest.
+`E2E_CACHE_DIR` or `--cache-dir <dir>` (on `run` and `cache`) replaces
+`cache.dir` (file store only), so worktrees can share one directory; the mode
+stays as configured.
 `cache` commands read the same config as `run` (`--config`, `cache.dir`);
 with a custom `cache.store` they refuse (exit 2), inspect that store with
 its own tools.
@@ -123,7 +127,7 @@ hosted service's video by URL.
   `--repeat-each`), `selected`, `status`, `attempts[]` of `steps[]`,
   `artifacts[]`, `error`. `run.summary` counts the selected results:
   `passed`, `failed` (timed out included), `interrupted` (stopped by the
-  run: a signal, `--max-failures`, a run-level error; not a failure), `flaky`, and `skipped` add up
+  run: a signal, `--max-failures`, `--max-duration`, a run-level error; not a failure), `flaky`, and `skipped` add up
   to `selected`; `discovered - selected` were left out.
 - `junit`: `junit.xml` for CI summaries; `--reporter list,junit` keeps the
   terminal output.
@@ -160,7 +164,7 @@ hosted service's video by URL.
 | 130 | Interrupted by an external signal |
 
 The highest code present wins (`130 > 4 > 3 > 2 > 1 > 0`). 130 needs an
-external signal: a `--max-failures` stop or a run-level error that
+external signal: a `--max-failures` or `--max-duration` stop or a run-level error that
 interrupted workers keeps the failures' or the error's code. Exit 2 is
 deterministic, never retry it; only exit 3 is worth a job-level retry.
 

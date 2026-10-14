@@ -131,6 +131,20 @@ export function failureLimitSkip(failures: number, limit: number): SkipInfo {
   };
 }
 
+/** A run's time limit, in milliseconds, and where it was set: the `--max-duration` flag or the config's `maxDuration`. */
+export interface TimeLimit {
+  readonly ms: number;
+  readonly source: '--max-duration' | 'maxDuration';
+}
+
+/** Skip info for the work a run stopped at its time limit never started. */
+export function timeLimitSkip(limit: TimeLimit): SkipInfo {
+  return {
+    cause: 'time-limit',
+    reason: `run stopped at its time limit of ${limit.ms} ms (${limit.source})`,
+  };
+}
+
 /**
  * The skip for work an interrupt reached before it started: the skip the
  * interrupt carried as its reason (a run stopped at its failure limit says

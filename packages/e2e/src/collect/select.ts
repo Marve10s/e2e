@@ -45,7 +45,8 @@ export interface SkipInfo {
     | 'serial-predecessor-failed'
     | 'hook-failed'
     | 'infrastructure-unavailable'
-    | 'failure-limit';
+    | 'failure-limit'
+    | 'time-limit';
   readonly reason: string;
   readonly relatedId?: string;
 }

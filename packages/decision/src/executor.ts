@@ -126,6 +126,7 @@ class Step {
   private readonly locates: boolean;
   private readonly locator: PointLocator;
   private previousFingerprint: string | undefined;
+  private origin: string | undefined;
   /** The turn of the last action taken, settled by the next observation. */
   private pendingTurn: StepTurn | undefined;
   private rejectedTerminals = 0;
@@ -221,6 +222,7 @@ class Step {
   private async act(): Promise<StepVerdict> {
     for (;;) {
       const view = await this.view(this.canType);
+      this.origin ??= view.path;
       if (view.space === undefined) return blocked('A complete semantic observation is required.');
       const acting: Acting = { ...view, space: view.space };
       this.settle(acting);
@@ -361,7 +363,7 @@ class Step {
   private async terminalCheck(claim: 'done' | 'failed'): Promise<StepVerdict | undefined> {
     const { path, space, screenshot } = await this.view(true);
     if (space === undefined) return this.rejectClaim(claim, 'incomplete observation');
-    const answers = await this.ask(completionRequest(this.ctx, space, this.history, path, screenshot));
+    const answers = await this.ask(completionRequest(this.ctx, space, this.history, path, screenshot, this.origin));
     if (answers === undefined) return blocked(this.budgetMessage());
     const evidence = describe(need(answers.verdict, 'verdict'));
     const settled = verdictOf(answers.verdict, this.gates);

@@ -61,6 +61,9 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** Longest delay `setTimeout` honors; a longer one fires at once. */
+export const MAX_TIMER_MS = 2 ** 31 - 1;
+
 /** Canonical polling cadence for locator and assertion loops. */
 export const POLL_INTERVAL_MS = 100;
 
