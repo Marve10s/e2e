@@ -47,6 +47,7 @@ The agent can now seed a cart before it checks out:
 await agent.act('seed the cart with SKU {sku}, then check out', {
   params: { sku: 'SHIRT-BLUE-M' },
 });
+await expect(screen.getByText('Order confirmed')).toBeVisible();
 ```
 
 <Note>

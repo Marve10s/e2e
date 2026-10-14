@@ -15,7 +15,9 @@ simulators, Android emulators, and connected phones.
 
 Read the one reference that matches the request before doing anything else.
 Each stands on its own; a reference names another topic only for a side
-trip. The installed CLI prints the same text with `npx e2e guide <topic>`.
+trip. `npx e2e guide <topic>` prints the installed package's version of a
+reference; prefer it when it differs from this copy.
+The Rules and Feedback sections below still apply.
 
 | When you are | Topic | Read |
 | --- | --- | --- |
@@ -83,14 +85,15 @@ test('a member upgrades to Pro', async ({ app, agent, screen, browser }) => {
 
 1. Look at what exists: `e2e.config.ts` or `e2e.config.mts`, the `tests` glob
    (default `tests/**/*.e2e.ts`), `e2e` in `package.json`. Nothing there:
-   follow `setup`.
+   follow `setup` when the user has requested e2e (see Rules).
 2. Learn the screens before writing a test: routes, labels, roles, button
    text. Semantic locators need the accessible names the app renders, so read
    the components, open the page with `--headed`, or drive the live app over
-   the registered `e2e mcp` server (topic `mcp`): `open_session`, `observe`,
+   a connected `e2e mcp` server (topic `mcp`): `open_session`, `observe`,
    and `locate` show exact names and check a locator before you write it.
-3. Write `tests/<feature>.e2e.ts`. Drive the flow with `agent.act`, one goal
-   per call, and pin each outcome right after with `expect` or `agent.assert`.
+3. Write `tests/<feature>.e2e.ts`. Drive the flow with `agent.act`, one
+   atomic goal per call, and pin each outcome right after with `expect` or
+   `agent.assert`. A test with three goals makes three calls.
    Exact values go through `screen`: a sign-in form in a setup test, a field
    that must receive one specific string, a count that must be one number.
 4. Run one file: `npx e2e run tests/<feature>.e2e.ts`. Agent steps need a
@@ -104,6 +107,10 @@ test('a member upgrades to Pro', async ({ app, agent, screen, browser }) => {
 
 ## Rules
 
+- In a project without e2e, set it up when the user requests it. Otherwise
+  ask before adding a test framework, and name any existing framework.
+- Live MCP tools need the project's own `e2e mcp` server registered in the
+  client (topic `mcp`); writing and running tests use the CLI directly.
 - Run the CLI as `npx e2e ...` (or `pnpm exec e2e ...`).
 - The config is `export default { ... } satisfies E2EConfig` with
   `import type { E2EConfig } from 'e2e'`. `targets` is required; a UI target
@@ -127,8 +134,11 @@ test('a member upgrades to Pro', async ({ app, agent, screen, browser }) => {
   namespaces: `secrets.get` never returns a password), and hand the opaque
   `Secret` only to `fill()` or `agent.act` params.
 - Agent instructions: one goal per `act`, the wording on screen, real values
-  in params. Judge meaning, not phrasing: `toContain('Pro')`, not an exact
-  sentence a model produced.
+  in params. A goal is atomic: one outcome that one check confirms. Two
+  outcomes worth checking are two goals, so split them into two `act` calls
+  (topic `agent`). Bad: `'add a todo and mark it done'`. Good: `'add a
+  todo'`, check, then `'mark the todo as done'`, check. Judge meaning, not
+  phrasing: `toContain('Pro')`, not an exact sentence a model produced.
 - Check each agent goal's outcome. A passing `act` with a recorded check can
   be cached and replayed without model calls (topic `agent`).
 - Shape the agent for this app: `context` for vocabulary the screens use,
@@ -141,10 +151,12 @@ test('a member upgrades to Pro', async ({ app, agent, screen, browser }) => {
 
 ## Feedback
 
-When e2e itself gets in your way, tell the e2e team: a command or API that
-broke (`bug`), docs or this skill that misled you (`docs`), or a capability
-you needed and did not find (`feature`). Send it once per problem, after you
-worked around it or gave up, never for failures of the app under test.
+When e2e itself gets in your way, offer to tell the e2e team: a command or
+API that broke (`bug`), docs or this skill that misled you (`docs`), or a
+capability you needed and did not find (`feature`). Once per problem, after
+you worked around it or gave up, never for failures of the app under test.
+Run it with `--dry-run` first, show the user what would be sent, and send
+it only when they agree.
 
 ```bash
 npx e2e feedback --type bug -m "<one or two sentences>" \
@@ -154,6 +166,5 @@ npx e2e feedback --type bug -m "<one or two sentences>" \
 
 Describe e2e's behavior only: never paste app content, page text, test files,
 URLs of private apps, or credentials. Secret-named environment variables and
-common token shapes are redacted, but do not rely on it. `--dry-run` prints
-what would be sent. Tell the user you sent it and give them the reference id
-it prints.
+common token shapes are redacted, but do not rely on it. After sending, give
+the user the reference id it prints.

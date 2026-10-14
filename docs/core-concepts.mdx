@@ -22,7 +22,10 @@ import { test, expect } from 'e2e';
 test('todos survive a filter round-trip', async ({ app, agent, screen }) => {
   await app.open('/todos');
 
-  await agent.act('add todos "Buy milk" and "Walk the dog", complete the first');
+  await agent.act('add todos "Buy milk" and "Walk the dog"');
+  await expect(screen.getByTestId('todo')).toHaveCount(2);
+
+  await agent.act('complete "Buy milk"');
   await agent.assert('only one todo remains open');
 
   await screen.getByRole('tab', 'Done').tap();
@@ -43,7 +46,34 @@ await agent.act('complete checkout with the test card');
 await agent.act('invite {email} as an editor', { params: { email: 'ada@example.test' } });
 ```
 
-- Write one goal for each call. You control the order of the goals.
+Keep each goal atomic: one outcome that one check confirms. When two parts
+of an instruction each leave a state worth checking, they are two goals.
+A test can have many goals.
+
+```ts title="Bad: three goals in one call, no check between them"
+await agent.act('open the Pro plan, set the seats to {seats}, and check out', {
+  params: { seats: 3 },
+});
+```
+
+```ts title="Good: one atomic goal per call, each checked before the next"
+await agent.act('open the Pro plan');
+await expect(screen.getByRole('heading', 'Pro plan')).toBeVisible();
+
+await agent.act('set the seats to {seats}', { params: { seats: 3 } });
+await expect(screen.getByRole('status', 'Seats')).toHaveText('3 seats');
+
+await agent.act('check out');
+await expect(screen.getByText('Order confirmed')).toBeVisible();
+```
+
+A failure then names the goal that broke. Each goal replays from its own
+recording and gets its own model-call and action
+[budgets](/reference/agent#budgets). The actions toward one outcome are not
+goals: opening the screen or menu that holds a control, scrolling to it,
+closing a banner, or filling the fields of one form.
+
+- You control the order of the goals. The agent picks the actions.
 - Check each goal's result with an `expect`. The [replay cache](/cache)
   records a goal only after a later check passes.
 - Use the words that the screen shows.

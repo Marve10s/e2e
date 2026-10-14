@@ -87,8 +87,12 @@ resolves the way TypeScript resolves it: `./helper.js` and `./helper` load
 `lib/package.json` names as `main`, else `lib/index.ts`, a bare import that
 `tsconfig.json` maps through `paths` or `baseUrl` loads the mapped file, and
 a `#` import or package export that names a missing `./x.js`, `./x.jsx`, or
-`./x` loads its `x.ts` or `x.tsx` source when imported (a `require()` of it fails as Node.js reports
-it). An import written in a JavaScript file resolves
+`./x` loads its `x.ts` or `x.tsx` source when imported. One that names a
+directory, or a subpath of a package without `exports` that is a directory
+(`@acme/db/enums`), loads the directory the way `./lib` does: the file its
+`package.json` names as `main`, else its `index.ts`. Under
+Yarn PnP that package subpath still fails. A `require()` of either fails as
+Node.js reports it. An import written in a JavaScript file resolves
 as Node.js resolves it.
 
 The `tsconfig.json` is the nearest one above the file, or, when that one has
