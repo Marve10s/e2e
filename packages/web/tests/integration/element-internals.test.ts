@@ -129,6 +129,41 @@ it('tracks the first app script in frames and in a replacement context', async (
   expect(await testIds(byRole('image', 'Amount'))).toEqual(['amount']);
 });
 
+it('keeps native role results unchanged when an unrelated element attaches internals', async () => {
+  const page = surface.requirePage();
+  await page.setContent('<div inert><button data-testid="save">Save</button></div>');
+  expect(await testIds(byRole('button', 'Save'))).toEqual(['save']);
+  await page.evaluate(() => {
+    customElements.define('x-plain', class extends HTMLElement {
+      constructor() { super(); this.attachInternals(); }
+    });
+    const plain = document.createElement('x-plain');
+    plain.textContent = 'plain';
+    document.body.append(plain);
+  });
+  expect(await testIds(byRole('button', 'Save'))).toEqual(['save']);
+});
+
+it('reads checked and pressed states from internals defaults', async () => {
+  const page = surface.requirePage();
+  await page.setContent('<x-check data-testid="box">Box</x-check><x-press data-testid="press">Press</x-press>');
+  await page.evaluate(() => {
+    customElements.define('x-check', class extends HTMLElement {
+      constructor() { super(); const internals = this.attachInternals(); internals.role = 'checkbox'; internals.ariaChecked = 'true'; }
+    });
+    customElements.define('x-press', class extends HTMLElement {
+      constructor() { super(); const internals = this.attachInternals(); internals.role = 'button'; internals.ariaPressed = 'true'; }
+    });
+  });
+  const role = (value: string, states: Record<string, boolean>): LocatorExpression => ({
+    kind: 'query', query: { kind: 'role', value: { kind: 'string', value, exact: true }, states },
+  });
+  expect(await testIds(role('checkbox', { checked: true }))).toEqual(['box']);
+  expect(await testIds(role('checkbox', { checked: false }))).toEqual([]);
+  expect(await testIds(role('button', { pressed: true }))).toEqual(['press']);
+  expect(await testIds(role('button', { pressed: false }))).toEqual([]);
+});
+
 it('keeps mixed checked and pressed states out of boolean false queries', async () => {
   const page = surface.requirePage();
   await page.setContent('<x-toggle role="checkbox" aria-checked="mixed" data-testid="mixed">Toggle</x-toggle><x-toggle role="checkbox" aria-checked="false" data-testid="unchecked">Toggle</x-toggle><x-toggle role="button" aria-pressed="mixed" data-testid="mixed-pressed">Toggle</x-toggle><x-toggle role="button" aria-pressed="false" data-testid="released">Toggle</x-toggle>');

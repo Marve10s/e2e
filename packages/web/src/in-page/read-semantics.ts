@@ -25,8 +25,22 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
   element: Element,
   options: { testIdAttribute: string; secureFieldSelector: string; mode: Mode },
 ): SemanticResult<Mode> => {
-  const internals = (globalThis as typeof globalThis & Record<symbol, WeakMap<Element, ElementInternals> | undefined>)[Symbol.for('e2e.elementInternals')];
-  const internalAttributes = { role: 'role', 'aria-label': 'ariaLabel', 'aria-hidden': 'ariaHidden' } as const;
+  // The record the ElementInternals init script leaves (`ELEMENT_INTERNALS_KEY`
+  // in `element-internals.ts`); the literal is repeated here because this
+  // function is serialized into the page and cannot import it.
+  const internalsRecord = (globalThis as typeof globalThis & Record<symbol, { elements: WeakMap<Element, ElementInternals>; count: number } | undefined>)[Symbol.for('e2e.elementInternals')];
+  const internals = internalsRecord?.elements;
+  const internalAttributes = {
+    role: 'role',
+    'aria-label': 'ariaLabel',
+    'aria-hidden': 'ariaHidden',
+    'aria-checked': 'ariaChecked',
+    'aria-pressed': 'ariaPressed',
+    'aria-expanded': 'ariaExpanded',
+    'aria-selected': 'ariaSelected',
+    'aria-disabled': 'ariaDisabled',
+    'aria-level': 'ariaLevel',
+  } as const;
 
   /** A present content attribute overrides its matching custom-element default, including an empty value. */
   const accessibilityAttribute = (el: Element, attribute: keyof typeof internalAttributes): string | null =>
@@ -1257,7 +1271,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    * disabled ancestor costs one walk, not one per node.
    */
   const ariaDisabledInChain = memoized((el: Element): boolean => {
-    const attribute = (el.getAttribute('aria-disabled') ?? '').toLowerCase();
+    const attribute = (accessibilityAttribute(el, 'aria-disabled') ?? '').toLowerCase();
     if (attribute === 'true') return true;
     if (attribute === 'false') return false;
     const parent = parentOrHostOf(el);
@@ -1274,7 +1288,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
    */
   const isDisabled = (el: Element): boolean => {
     if (el.matches(':disabled')) return true;
-    if (el.getAttribute('aria-disabled') === 'true') return true;
+    if (accessibilityAttribute(el, 'aria-disabled') === 'true') return true;
     const role = implicitRole(el);
     return role !== null && ARIA_DISABLED_ROLES.indexOf(role) !== -1 && ariaDisabledInChain(el);
   };
@@ -1319,18 +1333,18 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     // nothing about what the browser will submit. ARIA fills in only where the
     // element has no native state.
     if (checked === null) {
-      const ariaChecked = el.getAttribute('aria-checked');
+      const ariaChecked = accessibilityAttribute(el, 'aria-checked');
       if (ariaChecked !== null) checked = ariaChecked === 'true';
     }
     if (selectedState === null) {
-      const ariaSelected = el.getAttribute('aria-selected');
+      const ariaSelected = accessibilityAttribute(el, 'aria-selected');
       if (ariaSelected !== null) selectedState = ariaSelected.toLowerCase() === 'true';
     }
 
     const disabled = isDisabled(el);
 
-    const ariaExpanded = el.getAttribute('aria-expanded');
-    const ariaPressed = el.getAttribute('aria-pressed');
+    const ariaExpanded = accessibilityAttribute(el, 'aria-expanded');
+    const ariaPressed = accessibilityAttribute(el, 'aria-pressed');
     // Matched against the shared selector rather than re-derived from tag and
     // type, so this node's `secure` flag and the screenshot mask agree by
     // construction.
@@ -1386,7 +1400,7 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
     const role = isDocumentRoot ? 'document' : roleOf(el, tag);
     let level: number | null = null;
     if (role === 'heading') {
-      const ariaLevel = Number.parseInt(el.getAttribute('aria-level') ?? '', 10);
+      const ariaLevel = Number.parseInt(accessibilityAttribute(el, 'aria-level') ?? '', 10);
       if (Number.isInteger(ariaLevel) && ariaLevel > 0) level = ariaLevel;
       else if (/^h[1-6]$/.test(tag)) level = Number(tag.slice(1));
       // HTML-AAM: a role="heading" element with no aria-level is level 2.
@@ -1421,13 +1435,6 @@ export const readSemanticsFunction = <Mode extends SemanticMode>(
   // The conditional return type resolves per call site; inside the body the
   // discriminant narrows the value but not the generic, hence the casts.
   if (options.mode.kind === 'hidden') return isHidden(element) as SemanticResult<Mode>;
-  if (options.mode.kind === 'accessible-hidden') {
-    if (styleOf(element)?.visibility !== 'visible' || isSkippedContent(element)) return true as SemanticResult<Mode>;
-    for (let current: Element | null = element; current !== null; current = current.assignedSlot ?? parentOrHostOf(current)) {
-      if (hidesSubtree(current, styleOf(current))) return true as SemanticResult<Mode>;
-    }
-    return false as SemanticResult<Mode>;
-  }
   if (options.mode.kind === 'node') {
     return describe(element) as SemanticResult<Mode>;
   }
