@@ -187,6 +187,9 @@ substring; a `RegExp` matches as written.
   `attachShadow`, not declarative closed roots. `browser.locator(css)`,
   `frameLocator`, and `filter({ hasText })` stop at a closed root; query the
   text inside or filter with `has`.
+- On web, role queries and observations read a custom element's
+  ElementInternals `role`, `ariaLabel`, and `ariaHidden`. Attributes on the
+  element take precedence.
 - `screen.scrollUntilVisible(locator, { direction?, momentum?, timeout? })`
   scrolls the viewport (`down`, `slow` by default) until the locator resolves
   visibly, else `LOCATOR_NOT_FOUND`; on a locator it scrolls that node.
